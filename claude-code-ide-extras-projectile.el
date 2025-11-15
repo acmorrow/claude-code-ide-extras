@@ -181,6 +181,44 @@ Returns a status message."
               (kill-compilation)
               (format "Killed compilation in buffer: %s" buffer-name)))))))
 
+  ;; Generic buffer search utility
+  (defun claude-code-ide-extras-projectile--search-buffer (buffer-name pattern &optional context-lines)
+    "Search BUFFER-NAME for PATTERN using occur, return formatted results.
+BUFFER-NAME is the name of the buffer to search.
+PATTERN is a regular expression to search for.
+CONTEXT-LINES specifies number of lines before/after each match (default 0)."
+    (let ((buf (get-buffer buffer-name)))
+      (if (not buf)
+          (format "Error: Buffer not found: %s" buffer-name)
+        (let ((saved-occur-buf (get-buffer "*Occur*")))
+          ;; Save any existing *Occur* buffer by renaming it temporarily
+          (when saved-occur-buf
+            (with-current-buffer saved-occur-buf
+              (rename-buffer (generate-new-buffer-name "*Occur*") t)))
+          (unwind-protect
+              (progn
+                ;; Run occur - creates new *Occur*
+                (with-current-buffer buf
+                  (occur pattern (or context-lines 0)))
+                ;; Read from the new *Occur* buffer
+                (with-current-buffer "*Occur*"
+                  (buffer-substring-no-properties (point-min) (point-max))))
+            ;; Clean up: kill our *Occur*, restore saved one
+            (when (get-buffer "*Occur*")
+              (kill-buffer "*Occur*"))
+            (when saved-occur-buf
+              (with-current-buffer saved-occur-buf
+                (rename-buffer "*Occur*"))))))))
+
+  ;; Tool 5: Search projectile task output
+  (defun claude-code-ide-extras-projectile--task-search (buffer-name pattern &optional context-lines)
+    "Search projectile task/compilation output for PATTERN.
+BUFFER-NAME is the compilation buffer name (from task_start).
+PATTERN is a regular expression to search for.
+CONTEXT-LINES specifies number of lines before/after each match (default 0)."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (claude-code-ide-extras-projectile--search-buffer buffer-name pattern context-lines)))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -250,6 +288,21 @@ Returns a status message."
    :args '((:name "buffer_name"
             :type string
             :description "The name of the compilation buffer to kill.")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-projectile--task-search
+   :name "claude-code-ide-extras-projectile/task_search"
+   :description "Search for a pattern in projectile task/compilation output. Returns matching lines with optional context. Use this to find specific errors, warnings, or log output without retrieving the entire output."
+   :args '((:name "buffer_name"
+            :type string
+            :description "The name of the compilation buffer to search (returned by projectile_task_start).")
+           (:name "pattern"
+            :type string
+            :description "Regular expression pattern to search for (e.g., 'error:', 'warning:', 'undefined reference').")
+           (:name "context_lines"
+            :type number
+            :description "Number of context lines to show before and after each match (optional, default 0)."
+            :optional t)))
 
   (message "Claude Code IDE Extras: Projectile tools registered"))
 
