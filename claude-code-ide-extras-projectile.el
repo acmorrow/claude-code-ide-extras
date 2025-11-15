@@ -41,7 +41,7 @@
 ;;; Tool implementations
 
   ;; Custom MCP tools for reading dir-locals
-  (defun my/claude-read-dir-locals (file-path)
+  (defun claude-code-ide-extras-projectile--read-dir-locals (file-path)
     "Read effective dir-local variables for FILE-PATH.
 Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
     (claude-code-ide-mcp-server-with-session-context nil
@@ -55,9 +55,9 @@ Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
                       file-path
                       (error-message-string err))))))
 
-  (defun my/claude-read-project-dir-locals (file-path)
+  (defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
     "Read effective dir-local variables for the project containing FILE-PATH.
-Finds the project root and delegates to `my/claude-read-dir-locals`."
+Finds the project root and delegates to `claude-code-ide-extras-projectile--read-dir-locals`."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let* ((default-directory (file-name-directory file-path))
@@ -67,14 +67,14 @@ Finds the project root and delegates to `my/claude-read-dir-locals`."
                                   default-directory))
                  ;; Use a dummy file in the project root
                  (probe-file (expand-file-name ".dir-locals-probe" project-root)))
-            (my/claude-read-dir-locals probe-file))
+            (claude-code-ide-extras-projectile--read-dir-locals probe-file))
         (error (format "Error reading project dir-locals: %s" (error-message-string err))))))
 
   ;; Custom MCP tools for projectile task management (split architecture)
   (require 'seq)  ; For seq-take-last in task output limiting
 
   ;; Tool 1: Start a projectile task (non-blocking)
-  (defun my/claude-projectile-task-start (task-type command file-path)
+  (defun claude-code-ide-extras-projectile--task-start (task-type command file-path)
     "Start a projectile task (compile, test, configure, install, package, run).
 Returns the compilation buffer name for later querying.
 
@@ -116,7 +116,7 @@ FILE-PATH is used to determine which project to operate on."
                   (format "Started %s in buffer: %s" task-type buffer-name)))))))))
 
   ;; Tool 2: Wait for projectile task completion and get size info
-  (defun my/claude-projectile-task-wait (buffer-name)
+  (defun claude-code-ide-extras-projectile--task-wait (buffer-name)
     "Check if compilation is finished and return size info when done.
 
 BUFFER-NAME is the name of the compilation buffer to check.
@@ -138,7 +138,7 @@ limiting when calling projectile_task_query."
                         line-count char-count))))))))
 
   ;; Tool 3: Query projectile task output (call after task-wait says finished)
-  (defun my/claude-projectile-task-query (buffer-name &optional head-lines tail-lines)
+  (defun claude-code-ide-extras-projectile--task-query (buffer-name &optional head-lines tail-lines)
     "Retrieve output from a finished compilation buffer.
 
 BUFFER-NAME is the name of the compilation buffer to query.
@@ -166,7 +166,7 @@ Returns the compilation output, optionally limited by head-lines or tail-lines."
                (t full-output))))))))
 
   ;; Tool 4: Kill a running projectile task
-  (defun my/claude-projectile-task-kill (buffer-name)
+  (defun claude-code-ide-extras-projectile--task-kill (buffer-name)
     "Kill a running compilation in the specified buffer.
 BUFFER-NAME is the name of the compilation buffer to kill.
 Returns a status message."
@@ -189,16 +189,16 @@ Returns a status message."
   (interactive)
 
   (claude-code-ide-make-tool
-   :function #'my/claude-read-dir-locals
-   :name "read_dir_locals"
+   :function #'claude-code-ide-extras-projectile--read-dir-locals
+   :name "claude-code-ide-extras-projectile/read_dir_locals"
    :description "Read buffer-local variables for a specific file path. Opens the file and returns buffer-local-variables as a Lisp form."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to a file or directory to read buffer-local variables for.")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-read-project-dir-locals
-   :name "read_project_dir_locals"
+   :function #'claude-code-ide-extras-projectile--read-project-dir-locals
+   :name "claude-code-ide-extras-projectile/read_project_dir_locals"
    :description "Read buffer-local variables for the project root containing a file. Finds the project root via projectile/project.el, then returns buffer-local-variables as a Lisp form."
    :args '((:name "file_path"
             :type string
@@ -206,8 +206,8 @@ Returns a status message."
 
   ;; Register the projectile task MCP tools
   (claude-code-ide-make-tool
-   :function #'my/claude-projectile-task-start
-   :name "projectile_task_start"
+   :function #'claude-code-ide-extras-projectile--task-start
+   :name "claude-code-ide-extras-projectile/task_start"
    :description "Start a projectile task (compile, test, configure, install, package, run) for a project. Non-blocking - returns immediately with the compilation buffer name. Use projectile_task_wait to poll for completion, then projectile_task_query to retrieve output. Requires projectile-per-project-compilation-buffer to be enabled."
    :args '((:name "task_type"
             :type string
@@ -220,16 +220,16 @@ Returns a status message."
             :description "Absolute path to a file in the project (used to determine which project to operate on).")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-projectile-task-wait
-   :name "projectile_task_wait"
+   :function #'claude-code-ide-extras-projectile--task-wait
+   :name "claude-code-ide-extras-projectile/task_wait"
    :description "Poll for projectile task completion and get output size. Returns 'running' if still executing, or 'finished' with line/character count when done. Use this to poll after projectile_task_start, then use the size info to decide whether to retrieve full output or use head/tail limiting with projectile_task_query."
    :args '((:name "buffer_name"
             :type string
             :description "The name of the compilation buffer to check (returned by projectile_task_start).")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-projectile-task-query
-   :name "projectile_task_query"
+   :function #'claude-code-ide-extras-projectile--task-query
+   :name "claude-code-ide-extras-projectile/task_query"
    :description "Retrieve compilation output from a finished task. Should only be called after projectile_task_wait indicates the task is finished. Returns full output by default, or limited output if head_lines or tail_lines is specified."
    :args '((:name "buffer_name"
             :type string
@@ -244,8 +244,8 @@ Returns a status message."
             :optional t)))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-projectile-task-kill
-   :name "projectile_task_kill"
+   :function #'claude-code-ide-extras-projectile--task-kill
+   :name "claude-code-ide-extras-projectile/task_kill"
    :description "Kill a running compilation in the specified buffer. Equivalent to pressing C-c C-k in the compilation buffer."
    :args '((:name "buffer_name"
             :type string

@@ -40,7 +40,7 @@
 ;;; Tool implementations
 
   ;; Custom MCP tools for Emacs introspection
-  (defun my/claude-emacs-describe (name type)
+  (defun claude-code-ide-extras-core--describe (name type)
     "Describe an Emacs symbol/mode/package.
 NAME is the symbol name as a string.
 TYPE is one of: function, variable, mode, package, symbol."
@@ -65,7 +65,7 @@ TYPE is one of: function, variable, mode, package, symbol."
                 (kill-buffer temp-buf))))
         (error (format "Error describing %s: %s" name (error-message-string err))))))
 
-  (defun my/claude-emacs-apropos (pattern)
+  (defun claude-code-ide-extras-core--apropos (pattern)
     "Search for all Emacs symbols matching PATTERN."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
@@ -78,7 +78,7 @@ TYPE is one of: function, variable, mode, package, symbol."
                   (kill-buffer)))))
         (error (format "Error running apropos: %s" (error-message-string err))))))
 
-  (defun my/claude-emacs-apropos-command (pattern)
+  (defun claude-code-ide-extras-core--apropos-command (pattern)
     "Search for interactive Emacs commands matching PATTERN."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
@@ -90,7 +90,7 @@ TYPE is one of: function, variable, mode, package, symbol."
                 (kill-buffer))))
         (error (format "Error running apropos-command: %s" (error-message-string err))))))
 
-  (defun my/claude-emacs-apropos-documentation (pattern)
+  (defun claude-code-ide-extras-core--apropos-documentation (pattern)
     "Search Emacs documentation for PATTERN."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
@@ -110,8 +110,8 @@ TYPE is one of: function, variable, mode, package, symbol."
   (interactive)
 
   (claude-code-ide-make-tool
-   :function #'my/claude-emacs-describe
-   :name "emacs_describe"
+   :function #'claude-code-ide-extras-core--describe
+   :name "claude-code-ide-extras-core/describe"
    :description "Get documentation for an Emacs symbol. Returns docstring, current value (for variables), arguments (for functions), and other metadata from the running Emacs session."
    :args '((:name "name"
             :type string
@@ -121,24 +121,24 @@ TYPE is one of: function, variable, mode, package, symbol."
             :description "The type of thing to describe: function, variable, mode, package, or symbol. Use 'symbol' for a unified view of all aspects.")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-emacs-apropos
-   :name "emacs_apropos"
+   :function #'claude-code-ide-extras-core--apropos
+   :name "claude-code-ide-extras-core/apropos"
    :description "Search for all Emacs symbols (functions, variables, faces, etc.) matching a pattern. Use for broad exploration."
    :args '((:name "pattern"
             :type string
             :description "Search pattern (regexp) to match symbol names.")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-emacs-apropos-command
-   :name "emacs_apropos_command"
+   :function #'claude-code-ide-extras-core--apropos-command
+   :name "claude-code-ide-extras-core/apropos_command"
    :description "Search for interactive Emacs commands (callable via M-x) matching a pattern. More focused than emacs_apropos - only returns commands users can invoke."
    :args '((:name "pattern"
             :type string
             :description "Search pattern (regexp) to match command names.")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-emacs-apropos-documentation
-   :name "emacs_apropos_documentation"
+   :function #'claude-code-ide-extras-core--apropos-documentation
+   :name "claude-code-ide-extras-core/apropos_documentation"
    :description "Search Emacs documentation text for a pattern. Finds functions/variables whose docstrings contain the pattern. Use for concept-based search (e.g., 'buffer naming', 'code formatting')."
    :args '((:name "pattern"
             :type string

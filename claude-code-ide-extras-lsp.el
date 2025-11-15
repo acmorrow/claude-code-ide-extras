@@ -39,7 +39,7 @@
 
 ;;; Tool implementations
 
-  (defun my/claude-lsp-format-buffer (file-path)
+  (defun claude-code-ide-extras-lsp--format-buffer (file-path)
     "Format the specified file using LSP formatting.
 FILE-PATH must be an absolute path to the file to format."
     (claude-code-ide-mcp-server-with-session-context nil
@@ -60,7 +60,7 @@ FILE-PATH must be an absolute path to the file to format."
                               (error-message-string err))))))))))
 
   ;; lsp-describe-thing-at-point wrapper (returns hover info as string)
-  (defun my/claude-lsp-describe-thing-at-point (file-path line column)
+  (defun claude-code-ide-extras-lsp--describe-thing-at-point (file-path line column)
     "Get LSP hover information at FILE-PATH:LINE:COLUMN.
 Returns formatted hover text including type signature and documentation.
 LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
@@ -98,16 +98,16 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
   (interactive)
 
   (claude-code-ide-make-tool
-   :function #'my/claude-lsp-format-buffer
-   :name "lsp_format_buffer"
+   :function #'claude-code-ide-extras-lsp--format-buffer
+   :name "claude-code-ide-extras-lsp/format_buffer"
    :description "Format a specific file using LSP formatting. Requires an absolute file path."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to the file to format.")))
 
   (claude-code-ide-make-tool
-   :function #'my/claude-lsp-describe-thing-at-point
-   :name "lsp_describe_thing_at_point"
+   :function #'claude-code-ide-extras-lsp--describe-thing-at-point
+   :name "claude-code-ide-extras-lsp/describe_thing_at_point"
    :description "Get LSP hover information (type signature and documentation) at a specific location. Returns formatted text with type, parameters, and docstring."
    :args '((:name "file_path"
             :type string
