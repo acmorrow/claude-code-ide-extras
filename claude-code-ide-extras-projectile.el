@@ -3,7 +3,6 @@
 ;; Copyright (C) 2025 Andrew Morrow
 
 ;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
-;; Package-Requires: ((emacs "30.1") (projectile "2.9.1") (claude-code-ide "0") (claude-code-ide-extras-common "0"))
 ;; Keywords: tools, projectile, ai, claude, mcp
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 

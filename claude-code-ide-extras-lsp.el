@@ -3,7 +3,6 @@
 ;; Copyright (C) 2025 Andrew Morrow
 
 ;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
-;; Package-Requires: ((emacs "30.1") (lsp-mode "20251112.625") (claude-code-ide "0"))
 ;; Keywords: tools, lsp, ai, claude, mcp
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
