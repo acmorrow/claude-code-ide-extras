@@ -2,11 +2,23 @@
 
 ;; Copyright (C) 2025 Andrew Morrow
 
-;; Author: Andrew Morrow <acm@magnitude.io>
-;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (projectile "2.8.0") (claude-code-ide "0.1.0"))
+;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
+;; Package-Requires: ((emacs "30.1") (projectile "2.9.1") (claude-code-ide "0"))
 ;; Keywords: tools, projectile, ai, claude, mcp
-;; URL: https://github.com/yourusername/claude-code-ide-extras
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published
+;; by the Free Software Foundation, either version 3 of the License,
+;; or (at your option) any later version.
+;;
+;; This file is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -22,8 +34,6 @@
 ;;
 ;; Installation:
 ;;
-;;   (package-vc-install-from-checkout "/path/to/claude-code-ide-extras"
-;;                                      'claude-code-ide-extras-projectile)
 ;;   (require 'claude-code-ide-extras-projectile)
 ;;   (claude-code-ide-extras-projectile-setup)
 
@@ -31,6 +41,7 @@
 
 (require 'projectile)
 (require 'claude-code-ide)
+(require 'claude-code-ide-extras-common)
 
 (defgroup claude-code-ide-extras-projectile nil
   "Projectile MCP tools for claude-code-ide."
@@ -183,35 +194,6 @@ Returns a status message."
               (kill-compilation)
               (format "Killed compilation in buffer: %s" buffer-name)))))))
 
-  ;; Generic buffer search utility
-  (defun claude-code-ide-extras-projectile--search-buffer (buffer-name pattern &optional context-lines)
-    "Search BUFFER-NAME for PATTERN using occur, return formatted results.
-BUFFER-NAME is the name of the buffer to search.
-PATTERN is a regular expression to search for.
-CONTEXT-LINES specifies number of lines before/after each match (default 0)."
-    (let ((buf (get-buffer buffer-name)))
-      (if (not buf)
-          (format "Error: Buffer not found: %s" buffer-name)
-        (let ((saved-occur-buf (get-buffer "*Occur*")))
-          ;; Save any existing *Occur* buffer by renaming it temporarily
-          (when saved-occur-buf
-            (with-current-buffer saved-occur-buf
-              (rename-buffer (generate-new-buffer-name "*Occur*") t)))
-          (unwind-protect
-              (save-window-excursion
-                (progn
-                  ;; Run occur - creates new *Occur*
-                  (with-current-buffer buf
-                    (occur pattern (or context-lines 0)))
-                  ;; Read from the new *Occur* buffer
-                  (with-current-buffer "*Occur*"
-                    (buffer-substring-no-properties (point-min) (point-max)))))
-            ;; Clean up: kill our *Occur*, restore saved one
-            (when (get-buffer "*Occur*")
-              (kill-buffer "*Occur*"))
-            (when saved-occur-buf
-              (with-current-buffer saved-occur-buf
-                (rename-buffer "*Occur*"))))))))
 
   ;; Tool 5: Search projectile task output
   (defun claude-code-ide-extras-projectile--task-search (buffer-name pattern &optional context-lines)
@@ -220,7 +202,7 @@ BUFFER-NAME is the compilation buffer name (from task_start).
 PATTERN is a regular expression to search for.
 CONTEXT-LINES specifies number of lines before/after each match (default 0)."
     (claude-code-ide-mcp-server-with-session-context nil
-      (claude-code-ide-extras-projectile--search-buffer buffer-name pattern context-lines)))
+      (claude-code-ide-extras-common--search-buffer buffer-name pattern context-lines)))
 
 ;;; Tool registration
 
