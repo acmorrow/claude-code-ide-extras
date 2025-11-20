@@ -129,7 +129,8 @@ limiting when calling projectile_task_query."
         (if (not buf)
             (format "Error: Buffer not found: %s" buffer-name)
           (with-current-buffer buf
-            (if (memq buf compilation-in-progress)
+            (if (and (get-buffer-process buf)
+                     (process-live-p (get-buffer-process buf)))
                 (format "Status: running")
               ;; Compilation finished - return size info
               (let* ((line-count (count-lines (point-min) (point-max)))
@@ -175,7 +176,8 @@ Returns a status message."
         (if (not buf)
             (format "Error: Buffer not found: %s" buffer-name)
           (with-current-buffer buf
-            (if (not (memq buf compilation-in-progress))
+            (if (not (and (get-buffer-process buf)
+                          (process-live-p (get-buffer-process buf))))
                 (format "No compilation running in buffer: %s" buffer-name)
               ;; Use compilation-mode's built-in kill function
               (kill-compilation)
