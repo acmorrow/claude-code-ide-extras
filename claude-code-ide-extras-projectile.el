@@ -198,13 +198,14 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
             (with-current-buffer saved-occur-buf
               (rename-buffer (generate-new-buffer-name "*Occur*") t)))
           (unwind-protect
-              (progn
-                ;; Run occur - creates new *Occur*
-                (with-current-buffer buf
-                  (occur pattern (or context-lines 0)))
-                ;; Read from the new *Occur* buffer
-                (with-current-buffer "*Occur*"
-                  (buffer-substring-no-properties (point-min) (point-max))))
+              (save-window-excursion
+                (progn
+                  ;; Run occur - creates new *Occur*
+                  (with-current-buffer buf
+                    (occur pattern (or context-lines 0)))
+                  ;; Read from the new *Occur* buffer
+                  (with-current-buffer "*Occur*"
+                    (buffer-substring-no-properties (point-min) (point-max)))))
             ;; Clean up: kill our *Occur*, restore saved one
             (when (get-buffer "*Occur*")
               (kill-buffer "*Occur*"))
