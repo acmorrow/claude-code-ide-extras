@@ -38,9 +38,15 @@
   :group 'tools
   :prefix "claude-code-ide-extras-common-")
 
+(defcustom claude-code-ide-extras-common-max-line-length 2000
+  "Maximum length of a single line when querying buffers.
+Lines longer than this are truncated to prevent token overflow."
+  :type 'integer
+  :group 'claude-code-ide-extras-common)
+
 ;;; Buffer utilities
 
-(defun claude-code-ide-extras-common--search-buffer (buffer-name pattern &optional context-lines)
+(defun claude-code-ide-extras-common--buffer-search (buffer-name pattern &optional context-lines)
   "Search BUFFER-NAME for PATTERN using occur, return formatted results.
 BUFFER-NAME is the name of the buffer to search.
 PATTERN is a regular expression to search for.
@@ -68,6 +74,64 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
           (when saved-occur-buf
             (with-current-buffer saved-occur-buf
               (rename-buffer "*Occur*"))))))))
+
+(defun claude-code-ide-extras-common--buffer-query (buffer-name &optional start-line num-lines)
+  "Retrieve contents from BUFFER-NAME.
+BUFFER-NAME is the name of the buffer to query.
+Optional START-LINE is the first line to retrieve (1-based, negative
+counts from end).
+Optional NUM-LINES is the number of lines to retrieve.
+
+START-LINE and NUM-LINES must both be provided or both be omitted.
+If omitted, returns entire buffer contents.
+If START-LINE is negative, counts from end (-1 = last line, -100 =
+100th from end).
+
+Lines longer than `claude-code-ide-extras-common-max-line-length'
+are truncated.
+Returns the buffer contents for the specified line range."
+  (let ((buf (get-buffer buffer-name)))
+    (if (not buf)
+        (format "Error: Buffer not found: %s" buffer-name)
+      ;; Validate parameters
+      (when (or (and start-line (not num-lines))
+                (and num-lines (not start-line)))
+        (error "start-line and num-lines must both be provided or both be omitted"))
+      (with-current-buffer buf
+        (save-excursion
+          (if (not start-line)
+              ;; No range specified - return whole buffer
+              (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
+                     (lines (split-string content "\n" t)))
+                (string-join
+                 (mapcar (lambda (line)
+                           (if (> (length line) claude-code-ide-extras-common-max-line-length)
+                               (substring line 0 claude-code-ide-extras-common-max-line-length)
+                             line))
+                         lines)
+                 "\n"))
+            ;; Range specified - compute actual start line
+            (let* ((total-lines (count-lines (point-min) (point-max)))
+                   (actual-start (if (< start-line 0)
+                                     (+ total-lines start-line 1)
+                                   start-line))
+                   ;; Clamp to valid range
+                   (actual-start (max 1 (min actual-start total-lines))))
+              (goto-char (point-min))
+              (forward-line (1- actual-start))
+              (let* ((start-pos (point))
+                     (_ (forward-line num-lines))
+                     (end-pos (point))
+                     (content (buffer-substring-no-properties start-pos end-pos))
+                     (lines (split-string content "\n" t)))
+                ;; Truncate long lines
+                (string-join
+                 (mapcar (lambda (line)
+                           (if (> (length line) claude-code-ide-extras-common-max-line-length)
+                               (substring line 0 claude-code-ide-extras-common-max-line-length)
+                             line))
+                         lines)
+                 "\n")))))))))
 
 (provide 'claude-code-ide-extras-common)
 ;;; claude-code-ide-extras-common.el ends here

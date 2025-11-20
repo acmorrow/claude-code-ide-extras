@@ -40,6 +40,7 @@
 ;;; Code:
 
 (require 'claude-code-ide)
+(require 'claude-code-ide-extras-common)
 
 (defgroup claude-code-ide-extras-core nil
   "Core Emacs introspection MCP tools for claude-code-ide."
@@ -112,6 +113,25 @@ TYPE is one of: function, variable, mode, package, symbol."
                 (kill-buffer))))
         (error (format "Error running apropos-documentation: %s" (error-message-string err))))))
 
+  ;; Buffer access tools
+  (defun claude-code-ide-extras-core--buffer-query (buffer-name &optional start-line num-lines)
+    "Query buffer contents by line range.
+BUFFER-NAME is the name of the buffer to query.
+Optional START-LINE is the first line to retrieve (1-based, negative
+counts from end).
+Optional NUM-LINES is the number of lines to retrieve.
+Both must be provided together or both omitted."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (claude-code-ide-extras-common--buffer-query buffer-name start-line num-lines)))
+
+  (defun claude-code-ide-extras-core--buffer-search (buffer-name pattern &optional context-lines)
+    "Search buffer contents for pattern.
+BUFFER-NAME is the name of the buffer to search.
+PATTERN is a regular expression to search for.
+Optional CONTEXT-LINES specifies lines of context before/after each match."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -153,6 +173,37 @@ TYPE is one of: function, variable, mode, package, symbol."
    :args '((:name "pattern"
             :type string
             :description "Search pattern (regexp) to match in documentation text.")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-core--buffer-query
+   :name "claude-code-ide-extras-core/buffer_query"
+   :description "Read contents from any Emacs buffer by line range. Lines are 1-based (line 1 is first line). Negative start_line counts from end (-100 = 100th line from end). Lines longer than the configured maximum are truncated. Use for reading compilation output, scratch buffers, message logs, or any other buffer contents. Both start_line and num_lines must be provided together or both omitted."
+   :args '((:name "buffer_name"
+            :type string
+            :description "Name of the buffer to read (e.g., '*scratch*', '*Messages*', '*compilation*').")
+           (:name "start_line"
+            :type number
+            :description "First line to read (1-based, negative counts from end). Must be provided with num_lines."
+            :optional t)
+           (:name "num_lines"
+            :type number
+            :description "Number of lines to read starting from start_line. Must be provided with start_line."
+            :optional t)))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-core--buffer-search
+   :name "claude-code-ide-extras-core/buffer_search"
+   :description "Search any Emacs buffer for a pattern using regular expressions. Returns matching lines with optional context. Use for finding specific content in compilation output, logs, scratch buffers, or any other buffer."
+   :args '((:name "buffer_name"
+            :type string
+            :description "Name of the buffer to search (e.g., '*scratch*', '*Messages*', '*compilation*').")
+           (:name "pattern"
+            :type string
+            :description "Regular expression pattern to search for.")
+           (:name "context_lines"
+            :type number
+            :description "Number of context lines before and after each match (optional, default 0)."
+            :optional t)))
 
   (message "Claude Code IDE Extras: Core tools registered"))
 

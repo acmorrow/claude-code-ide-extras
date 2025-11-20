@@ -68,7 +68,8 @@ Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
 
   (defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
     "Read effective dir-local variables for the project containing FILE-PATH.
-Finds the project root and delegates to `claude-code-ide-extras-projectile--read-dir-locals`."
+Finds the project root and delegates to
+`claude-code-ide-extras-projectile--read-dir-locals`."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let* ((default-directory (file-name-directory file-path))
@@ -132,9 +133,10 @@ FILE-PATH is used to determine which project to operate on."
 
 BUFFER-NAME is the name of the compilation buffer to check.
 
-Returns 'running' if still executing, or 'finished' with output size (lines and chars)
-when complete. Use this to poll for completion and decide whether to use head/tail
-limiting when calling projectile_task_query."
+Returns \\='running if still executing, or \\='finished with output size
+\(lines and chars) when complete. Use this to poll for completion and
+decide whether to use head/tail limiting when calling
+projectile_task_query."
     (claude-code-ide-mcp-server-with-session-context nil
       (let ((buf (get-buffer buffer-name)))
         (if (not buf)
@@ -150,33 +152,23 @@ limiting when calling projectile_task_query."
                         line-count char-count))))))))
 
   ;; Tool 3: Query projectile task output (call after task-wait says finished)
-  (defun claude-code-ide-extras-projectile--task-query (buffer-name &optional head-lines tail-lines)
+  (defun claude-code-ide-extras-projectile--task-query (buffer-name &optional start-line num-lines)
     "Retrieve output from a finished compilation buffer.
 
 BUFFER-NAME is the name of the compilation buffer to query.
-Optional HEAD-LINES limits output to first N lines.
-Optional TAIL-LINES limits output to last N lines.
+Optional START-LINE is the first line to retrieve (1-based, negative
+counts from end).
+Optional NUM-LINES is the number of lines to retrieve.
 
-This should only be called after projectile_task_wait indicates the task is finished.
-Returns the compilation output, optionally limited by head-lines or tail-lines."
+START-LINE and NUM-LINES must both be provided or both be omitted.
+If omitted, returns entire compilation output.
+
+This should only be called after projectile_task_wait indicates the
+task is finished.
+Returns the compilation output, optionally limited by the line
+range."
     (claude-code-ide-mcp-server-with-session-context nil
-      (let ((buf (get-buffer buffer-name)))
-        (if (not buf)
-            (format "Error: Buffer not found: %s" buffer-name)
-          (with-current-buffer buf
-            (let* ((full-output (buffer-substring-no-properties (point-min) (point-max)))
-                   (lines (split-string full-output "\n")))
-              (cond
-               ;; Limit to first N lines
-               (head-lines
-                (string-join (seq-take lines head-lines) "\n"))
-               ;; Limit to last N lines (use nbutlast or seq-drop since seq-take-last doesn't exist)
-               (tail-lines
-                (let ((drop-count (max 0 (- (length lines) tail-lines))))
-                  (string-join (seq-drop lines drop-count) "\n")))
-               ;; Return full output
-               (t full-output))))))))
-
+      (claude-code-ide-extras-common--buffer-query buffer-name start-line num-lines)))
   ;; Tool 4: Kill a running projectile task
   (defun claude-code-ide-extras-projectile--task-kill (buffer-name)
     "Kill a running compilation in the specified buffer.
@@ -202,7 +194,7 @@ BUFFER-NAME is the compilation buffer name (from task_start).
 PATTERN is a regular expression to search for.
 CONTEXT-LINES specifies number of lines before/after each match (default 0)."
     (claude-code-ide-mcp-server-with-session-context nil
-      (claude-code-ide-extras-common--search-buffer buffer-name pattern context-lines)))
+      (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
 
 ;;; Tool registration
 
@@ -253,17 +245,17 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-query
    :name "claude-code-ide-extras-projectile/task_query"
-   :description "Retrieve compilation output from a finished task. Should only be called after projectile_task_wait indicates the task is finished. Returns full output by default, or limited output if head_lines or tail_lines is specified."
+   :description "Retrieve compilation output from a finished task. Should only be called after projectile_task_wait indicates the task is finished. Returns full output if no range specified, or limited output if start_line and num_lines are provided (both required). Supports negative start_line to count from end."
    :args '((:name "buffer_name"
             :type string
             :description "The name of the compilation buffer to query (returned by projectile_task_start).")
-           (:name "head_lines"
+           (:name "start_line"
             :type number
-            :description "Limit output to first N lines (like 'head -n'). Recommended for checking errors at start of output."
+            :description "First line to retrieve (1-based, negative counts from end). Must be provided with num_lines."
             :optional t)
-           (:name "tail_lines"
+           (:name "num_lines"
             :type number
-            :description "Limit output to last N lines (like 'tail -n'). Recommended for checking summary/final errors."
+            :description "Number of lines to retrieve starting from start_line. Must be provided with start_line."
             :optional t)))
 
   (claude-code-ide-make-tool

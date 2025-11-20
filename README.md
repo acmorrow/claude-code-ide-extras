@@ -23,10 +23,11 @@ Semantic code understanding via LSP integration:
 - Documentation lookup at point
 
 **claude-code-ide-extras-core**
-Emacs introspection and help system access:
+Emacs introspection and buffer access:
 - Function and variable documentation
 - Command and symbol discovery
 - Documentation search across all loaded packages
+- Direct buffer read and search capabilities
 
 **claude-code-ide-extras-common** (internal library)
 Shared utilities used by other packages. Not intended for direct use.
@@ -98,7 +99,7 @@ Returns immediately with buffer name while task runs asynchronously.
 Returns status and line/character counts when finished.
 
 **task_query** - Retrieve compilation output
-Supports head/tail limiting for large outputs.
+Supports line range queries (start + count) with negative indexing for tail access.
 
 **task_search** - Search compilation output with regex patterns
 Returns matching lines with optional context.
@@ -115,7 +116,7 @@ Discovers project-specific build commands and configuration.
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Core (4 tools)
+### Core (6 tools)
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -125,6 +126,12 @@ Supports functions, variables, modes, packages, and symbols.
 **apropos_command** - Search interactive commands only
 
 **apropos_documentation** - Search symbol documentation text
+
+**buffer_query** - Read contents from any Emacs buffer
+Line-range queries with 1-based indexing and negative offset support. Enables scratch buffer collaboration and message log analysis.
+
+**buffer_search** - Search any Emacs buffer with regex
+Search compilation, scratch, messages, or any other buffer with optional context lines.
 
 ## Usage Examples
 

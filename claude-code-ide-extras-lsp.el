@@ -83,7 +83,8 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
             (condition-case err
                 (save-excursion
                   ;; Position at the specified location
-                  (goto-line line)
+                  (goto-char (point-min))
+                  (forward-line (1- line))
                   (move-to-column column)
                   ;; Get hover contents from LSP
                   (let ((contents (-some->> (lsp--text-document-position-params)
