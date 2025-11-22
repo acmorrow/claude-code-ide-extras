@@ -1,4 +1,4 @@
-;;; claude-code-ide-extras-core.el --- Emacs introspection MCP tools for claude-code-ide  -*- lexical-binding: t; -*-
+;;; claude-code-ide-extras-emacs.el --- Emacs introspection MCP tools for claude-code-ide  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Andrew Morrow
 
@@ -298,4 +298,4 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
   (message "Claude Code IDE Extras: Emacs tools registered"))
 
 (provide 'claude-code-ide-extras-emacs)
-;;; claude-code-ide-extras-core.el ends here
+;;; claude-code-ide-extras-emacs.el ends here
