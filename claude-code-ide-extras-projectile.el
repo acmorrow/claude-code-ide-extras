@@ -53,10 +53,6 @@
 
 ;;; MCP Tool Names
 
-(defconst claude-code-ide-extras-projectile-read-dir-locals-tool-name
-  "claude-code-ide-extras-projectile/read_dir_locals"
-  "MCP tool name for read_dir_locals.")
-
 (defconst claude-code-ide-extras-projectile-read-project-dir-locals-tool-name
   "claude-code-ide-extras-projectile/read_project_dir_locals"
   "MCP tool name for read_project_dir_locals.")
@@ -133,16 +129,6 @@
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-projectile-task-kill-tool-name)
 
-(defcustom claude-code-ide-extras-projectile-read-dir-locals-usage-prompt
-  "Read file-local configuration variables for a specific file."
-  "Usage guidance for the read_dir_locals MCP tool."
-  :type 'string
-  :group 'claude-code-ide-extras-projectile)
-
-(put 'claude-code-ide-extras-projectile-read-dir-locals-usage-prompt
-     'claude-code-ide-extras-mcp-tool-name
-     claude-code-ide-extras-projectile-read-dir-locals-tool-name)
-
 (defcustom claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
   "Read project-wide configuration. Check for build commands and project settings."
   "Usage guidance for the read_project_dir_locals MCP tool."
@@ -155,21 +141,7 @@
 
 ;;; Tool implementations
 
-  ;; Custom MCP tools for reading dir-locals
-  (defun claude-code-ide-extras-projectile--read-dir-locals (file-path)
-    "Read effective dir-local variables for FILE-PATH.
-Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (condition-case err
-          (let ((buffer (find-file-noselect file-path)))
-            (unwind-protect
-                (with-current-buffer buffer
-                  (format "%S" (buffer-local-variables)))
-              (kill-buffer buffer)))
-        (error (format "Error reading dir-locals for %s: %s"
-                      file-path
-                      (error-message-string err))))))
-
+  ;; Custom MCP tool for reading project dir-locals
   (defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
     "Read effective dir-local variables for the project containing FILE-PATH.
 Finds the project root and delegates to
@@ -182,8 +154,12 @@ Finds the project root and delegates to
                                     (project-root proj))
                                   default-directory))
                  ;; Use a dummy file in the project root
-                 (probe-file (expand-file-name ".dir-locals-probe" project-root)))
-            (claude-code-ide-extras-projectile--read-dir-locals probe-file))
+                 (probe-file (expand-file-name ".dir-locals-probe" project-root))
+                 (buffer (find-file-noselect probe-file)))
+            (unwind-protect
+                (with-current-buffer buffer
+                  (format "%S" (buffer-local-variables)))
+              (kill-buffer buffer)))
         (error (format "Error reading project dir-locals: %s" (error-message-string err))))))
 
   ;; Custom MCP tools for projectile task management (split architecture)
@@ -306,14 +282,6 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 (defun claude-code-ide-extras-projectile-setup ()
   "Register all Projectile MCP tools with claude-code-ide."
   (interactive)
-
-  (claude-code-ide-make-tool
-   :function #'claude-code-ide-extras-projectile--read-dir-locals
-   :name claude-code-ide-extras-projectile-read-dir-locals-tool-name
-   :description "Read buffer-local variables for a specific file path. Opens the file and returns buffer-local-variables as a Lisp form."
-   :args '((:name "file_path"
-            :type string
-            :description "Absolute path to a file or directory to read buffer-local variables for.")))
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--read-project-dir-locals

@@ -76,6 +76,10 @@
   "claude-code-ide-extras-emacs/buffer_search"
   "MCP tool name for buffer_search.")
 
+(defconst claude-code-ide-extras-emacs-read-dir-locals-tool-name
+  "claude-code-ide-extras-emacs/read_dir_locals"
+  "MCP tool name for read_dir_locals.")
+
 ;;; Customization
 
 (defcustom claude-code-ide-extras-emacs-describe-usage-prompt
@@ -137,6 +141,16 @@
 (put 'claude-code-ide-extras-emacs-buffer-search-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-emacs-buffer-search-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-read-dir-locals-usage-prompt
+  "Read file-local configuration variables for a specific file."
+  "Usage guidance for the read_dir_locals MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-read-dir-locals-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-read-dir-locals-tool-name)
 
 ;;; Tool implementations
 
@@ -222,6 +236,20 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
     (claude-code-ide-mcp-server-with-session-context nil
       (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
 
+  (defun claude-code-ide-extras-emacs--read-dir-locals (file-path)
+    "Read effective dir-local variables for FILE-PATH.
+Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let ((buffer (find-file-noselect file-path)))
+            (unwind-protect
+                (with-current-buffer buffer
+                  (format "%S" (buffer-local-variables)))
+              (kill-buffer buffer)))
+        (error (format "Error reading dir-locals for %s: %s"
+                      file-path
+                      (error-message-string err))))))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -294,6 +322,14 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
             :type number
             :description "Number of context lines before and after each match (optional, default 0)."
             :optional t)))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--read-dir-locals
+   :name claude-code-ide-extras-emacs-read-dir-locals-tool-name
+   :description "Read buffer-local variables for a specific file path. Opens the file and returns buffer-local-variables as a Lisp form."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to a file or directory to read buffer-local variables for.")))
 
   (message "Claude Code IDE Extras: Emacs tools registered"))
 

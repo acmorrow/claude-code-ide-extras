@@ -53,6 +53,12 @@
 
 ;;; Customization
 
+(defcustom claude-code-ide-extras-meta-get-mcp-custom-advice-header
+  "# MCP Tool Usage Guidance\n\nThe following custom guidance has been configured for MCP tools:\n\n"
+  "Header text shown before the list of MCP tool guidance."
+  :type 'string
+  :group 'claude-code-ide-extras-meta)
+
 (defcustom claude-code-ide-extras-meta-get-mcp-custom-advice-usage-prompt
   "Call at session start to learn project-specific tool usage conventions and preferences."
   "Usage guidance for the get_mcp_custom_advice MCP tool."
@@ -92,8 +98,7 @@ matches the loaded tool set."
       (if (null prompts)
           "No custom MCP tool usage guidance has been configured.\n\nYou can set guidance globally via :custom in use-package, or per-project via .dir-locals.el."
         (concat
-         "# MCP Tool Usage Guidance\n\n"
-         "The following custom guidance has been configured for MCP tools:\n\n"
+         claude-code-ide-extras-meta-get-mcp-custom-advice-header
          (mapconcat
           (lambda (pair)
             (let ((mcp-name (car pair))
