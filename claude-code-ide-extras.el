@@ -27,6 +27,7 @@
 ;; The suite includes:
 ;; - claude-code-ide-extras-core: Emacs introspection (describe, apropos)
 ;; - claude-code-ide-extras-lsp: LSP integration (formatting, hover info)
+;; - claude-code-ide-extras-meta: Tools about the MCP tools themselves
 ;; - claude-code-ide-extras-projectile: Project tasks and shell execution
 ;;
 ;; Installation:
@@ -43,6 +44,7 @@
 
 (require 'claude-code-ide-extras-core)
 (require 'claude-code-ide-extras-lsp)
+(require 'claude-code-ide-extras-meta)
 (require 'claude-code-ide-extras-projectile)
 
 (defgroup claude-code-ide-extras nil
@@ -53,10 +55,11 @@
 ;;;###autoload
 (defun claude-code-ide-extras-setup ()
   "Set up all claude-code-ide-extras packages.
-This registers all MCP tools from projectile, core, and lsp packages."
+This registers all MCP tools from projectile, core, lsp, and meta packages."
   (interactive)
   (claude-code-ide-extras-core-setup)
   (claude-code-ide-extras-lsp-setup)
+  (claude-code-ide-extras-meta-setup)
   (claude-code-ide-extras-projectile-setup)
   (message "Claude Code IDE Extras: All tools registered"))
 
