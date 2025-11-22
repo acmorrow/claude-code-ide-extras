@@ -37,7 +37,7 @@
   :group 'tools
   :prefix "claude-code-ide-extras-common-")
 
-(defconst claude-code-ide-extras-common-version "0.0.0"
+(defconst claude-code-ide-extras-common-version "0.0.1"
   "Version of claude-code-ide-extras-common.")
 
 (defcustom claude-code-ide-extras-common-max-line-length 2000

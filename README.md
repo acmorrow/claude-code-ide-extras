@@ -183,6 +183,50 @@ Claude uses:
 2. describe - read documentation for specific functions
 ```
 
+## Customizing Tool Guidance
+
+The meta package provides a customization system for providing Claude with project-specific guidance on how to use MCP tools effectively.
+
+### Per-Tool Guidance
+
+Each tool has a `-usage-prompt` defcustom that you can set to provide usage guidance. For example:
+
+```elisp
+(use-package claude-code-ide-extras-projectile
+  :custom
+  (claude-code-ide-extras-projectile-task-start-usage-prompt
+   "Launch builds with 'compile' type, tests with 'test' type"))
+```
+
+### Cross-Cutting Guidance
+
+The `claude-code-ide-extras-meta-get-mcp-custom-advice-header` defcustom provides guidance that applies across multiple tools (workflows, tool selection principles, etc.):
+
+```elisp
+(use-package claude-code-ide-extras-meta
+  :custom
+  (claude-code-ide-extras-meta-get-mcp-custom-advice-header
+   "# MCP Tools\n\nPrefer semantic tools over text search..."))
+```
+
+### Loading from Files
+
+You can load guidance from markdown files for easier editing:
+
+```elisp
+(defun my/load-guidance (filename)
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name filename user-emacs-directory))
+    (buffer-string)))
+
+(use-package claude-code-ide-extras-meta
+  :custom
+  (claude-code-ide-extras-meta-get-mcp-custom-advice-header
+   (my/load-guidance "claude-mcp-guidance/meta/header.md")))
+```
+
+Claude retrieves this guidance by calling `get_mcp_custom_advice()` at session start.
+
 ## Security Model
 
 This package grants Claude access to:
