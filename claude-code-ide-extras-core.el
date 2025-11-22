@@ -47,6 +47,94 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-core-")
 
+;;; MCP Tool Names
+
+(defconst claude-code-ide-extras-core-describe-tool-name
+  "claude-code-ide-extras-core/describe"
+  "MCP tool name for describe.")
+
+(defconst claude-code-ide-extras-core-apropos-tool-name
+  "claude-code-ide-extras-core/apropos"
+  "MCP tool name for apropos.")
+
+(defconst claude-code-ide-extras-core-apropos-command-tool-name
+  "claude-code-ide-extras-core/apropos_command"
+  "MCP tool name for apropos_command.")
+
+(defconst claude-code-ide-extras-core-apropos-documentation-tool-name
+  "claude-code-ide-extras-core/apropos_documentation"
+  "MCP tool name for apropos_documentation.")
+
+(defconst claude-code-ide-extras-core-buffer-query-tool-name
+  "claude-code-ide-extras-core/buffer_query"
+  "MCP tool name for buffer_query.")
+
+(defconst claude-code-ide-extras-core-buffer-search-tool-name
+  "claude-code-ide-extras-core/buffer_search"
+  "MCP tool name for buffer_search.")
+
+;;; Customization
+
+(defcustom claude-code-ide-extras-core-describe-usage-prompt
+  "Get symbol documentation. Try 'symbol' type for complete info on functions, variables, and modes."
+  "Usage guidance for the describe MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-core)
+
+(put 'claude-code-ide-extras-core-describe-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-core-describe-tool-name)
+
+(defcustom claude-code-ide-extras-core-apropos-usage-prompt
+  "Search for symbols by name pattern. Use for broad exploration of available functionality."
+  "Usage guidance for the apropos MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-core)
+
+(put 'claude-code-ide-extras-core-apropos-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-core-apropos-tool-name)
+
+(defcustom claude-code-ide-extras-core-apropos-command-usage-prompt
+  "Find interactive commands only. More focused than apropos for discovering M-x commands."
+  "Usage guidance for the apropos_command MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-core)
+
+(put 'claude-code-ide-extras-core-apropos-command-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-core-apropos-command-tool-name)
+
+(defcustom claude-code-ide-extras-core-apropos-documentation-usage-prompt
+  "Search documentation by concept, not just symbol names. Useful for discovering related functionality."
+  "Usage guidance for the apropos_documentation MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-core)
+
+(put 'claude-code-ide-extras-core-apropos-documentation-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-core-apropos-documentation-tool-name)
+
+(defcustom claude-code-ide-extras-core-buffer-query-usage-prompt
+  "Read any Emacs buffer contents. Useful for *compilation*, *scratch*, *Messages*, etc."
+  "Usage guidance for the buffer_query MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-core)
+
+(put 'claude-code-ide-extras-core-buffer-query-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-core-buffer-query-tool-name)
+
+(defcustom claude-code-ide-extras-core-buffer-search-usage-prompt
+  "Search any buffer with regex. Complement to buffer_query for finding specific content."
+  "Usage guidance for the buffer_search MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-core)
+
+(put 'claude-code-ide-extras-core-buffer-search-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-core-buffer-search-tool-name)
+
 ;;; Tool implementations
 
   ;; Custom MCP tools for Emacs introspection
@@ -140,7 +228,7 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-core--describe
-   :name "claude-code-ide-extras-core/describe"
+   :name claude-code-ide-extras-core-describe-tool-name
    :description "Get documentation for an Emacs symbol. Returns docstring, current value (for variables), arguments (for functions), and other metadata from the running Emacs session."
    :args '((:name "name"
             :type string
@@ -151,7 +239,7 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-core--apropos
-   :name "claude-code-ide-extras-core/apropos"
+   :name claude-code-ide-extras-core-apropos-tool-name
    :description "Search for all Emacs symbols (functions, variables, faces, etc.) matching a pattern. Use for broad exploration."
    :args '((:name "pattern"
             :type string
@@ -159,7 +247,7 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-core--apropos-command
-   :name "claude-code-ide-extras-core/apropos_command"
+   :name claude-code-ide-extras-core-apropos-command-tool-name
    :description "Search for interactive Emacs commands (callable via M-x) matching a pattern. More focused than emacs_apropos - only returns commands users can invoke."
    :args '((:name "pattern"
             :type string
@@ -167,7 +255,7 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-core--apropos-documentation
-   :name "claude-code-ide-extras-core/apropos_documentation"
+   :name claude-code-ide-extras-core-apropos-documentation-tool-name
    :description "Search Emacs documentation text for a pattern. Finds functions/variables whose docstrings contain the pattern. Use for concept-based search (e.g., 'buffer naming', 'code formatting')."
    :args '((:name "pattern"
             :type string
@@ -175,7 +263,7 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-core--buffer-query
-   :name "claude-code-ide-extras-core/buffer_query"
+   :name claude-code-ide-extras-core-buffer-query-tool-name
    :description "Read contents from any Emacs buffer by line range. Lines are 1-based (line 1 is first line). Negative start_line counts from end (-100 = 100th line from end). Lines longer than the configured maximum are truncated. Use for reading compilation output, scratch buffers, message logs, or any other buffer contents. Both start_line and num_lines must be provided together or both omitted."
    :args '((:name "buffer_name"
             :type string
@@ -191,7 +279,7 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-core--buffer-search
-   :name "claude-code-ide-extras-core/buffer_search"
+   :name claude-code-ide-extras-core-buffer-search-tool-name
    :description "Search any Emacs buffer for a pattern using regular expressions. Returns matching lines with optional context. Use for finding specific content in compilation output, logs, scratch buffers, or any other buffer."
    :args '((:name "buffer_name"
             :type string

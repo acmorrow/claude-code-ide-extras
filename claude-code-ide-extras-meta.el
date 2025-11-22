@@ -42,30 +42,62 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-meta-")
 
+;;; MCP Tool Names
+
+(defconst claude-code-ide-extras-meta-get-mcp-custom-advice-tool-name
+  "claude-code-ide-extras-meta/get_mcp_custom_advice"
+  "MCP tool name for get_mcp_custom_advice.")
+
+;;; Customization
+
+(defcustom claude-code-ide-extras-meta-get-mcp-custom-advice-usage-prompt
+  "Call at session start to learn project-specific tool usage conventions and preferences."
+  "Usage guidance for the get_mcp_custom_advice MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-meta)
+
+(put 'claude-code-ide-extras-meta-get-mcp-custom-advice-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-meta-get-mcp-custom-advice-tool-name)
+
 ;;; Tool implementations
 
-  ;; Custom MCP tool for reading tool customization advice
-  (defun claude-code-ide-extras-meta--get-mcp-custom-advice ()
-    "Get project-specific guidance for MCP tool usage.
-Reads customization variables like `claude-code-ide-extras-projectile-tool-prompts'
-and returns them in a readable format for Claude to incorporate into its
-understanding of how to use the tools in this project."
-    (claude-code-ide-mcp-server-with-session-context nil
-      ;; Stub implementation - return lorem ipsum for now
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+(defun claude-code-ide-extras-meta--get-mcp-custom-advice ()
+  "Get project-specific guidance for MCP tool usage.
 
-This is a stub implementation of get_mcp_custom_advice.
+Reads usage-prompt customization variables for all registered
+claude-code-ide-extras MCP tools and returns them in a readable format.
 
-In the future, this will read customization variables like:
-- claude-code-ide-extras-projectile-tool-prompts
-- claude-code-ide-extras-core-tool-prompts
-- claude-code-ide-extras-lsp-tool-prompts
-- claude-code-ide-extras-meta-tool-prompts
+Only includes tools that are actually registered (via
+`claude-code-ide-mcp-server-get-tool-names'), ensuring the guidance
+matches the loaded tool set."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((prompts '())
+          ;; Get all registered MCP tools
+          (all-tools (claude-code-ide-mcp-server-get-tool-names)))
+      ;; Find all defcustoms with our metadata property
+      (mapatoms
+       (lambda (sym)
+         (when-let ((mcp-name (get sym 'claude-code-ide-extras-mcp-tool-name)))
+           ;; Only include if the tool is actually registered
+           (when (member mcp-name all-tools)
+             (let ((value (symbol-value sym)))
+               (when (and value (not (string-empty-p value)))
+                 (push (cons mcp-name value) prompts)))))))
 
-And format them into readable guidance for Claude to follow when using
-the MCP tools in this project.
-
-Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."))
+      ;; Format the output
+      (if (null prompts)
+          "No custom MCP tool usage guidance has been configured.\n\nYou can set guidance globally via :custom in use-package, or per-project via .dir-locals.el."
+        (concat
+         "# MCP Tool Usage Guidance\n\n"
+         "The following custom guidance has been configured for MCP tools:\n\n"
+         (mapconcat
+          (lambda (pair)
+            (let ((mcp-name (car pair))
+                  (value (cdr pair)))
+              (format "## %s\n%s\n" mcp-name value)))
+          (sort prompts (lambda (a b) (string< (car a) (car b))))
+          "\n"))))))
 
 ;;; Setup function
 
@@ -75,7 +107,7 @@ Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."))
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-meta--get-mcp-custom-advice
-   :name "claude-code-ide-extras-meta/get_mcp_custom_advice"
+   :name claude-code-ide-extras-meta-get-mcp-custom-advice-tool-name
    :description "Get project-specific guidance for using MCP tools. Reads customization variables (set via :custom or .dir-locals.el) that provide context about how to use the tools in this project. Call this at the start of a session to learn how the user wants to make use of the loaded claude-code-ide-extras MCPs."
    :args '())
 

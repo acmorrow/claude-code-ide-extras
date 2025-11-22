@@ -46,6 +46,38 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-lsp-")
 
+;;; MCP Tool Names
+
+(defconst claude-code-ide-extras-lsp-format-buffer-tool-name
+  "claude-code-ide-extras-lsp/format_buffer"
+  "MCP tool name for format_buffer.")
+
+(defconst claude-code-ide-extras-lsp-describe-thing-at-point-tool-name
+  "claude-code-ide-extras-lsp/describe_thing_at_point"
+  "MCP tool name for describe_thing_at_point.")
+
+;;; Customization
+
+(defcustom claude-code-ide-extras-lsp-format-buffer-usage-prompt
+  "Format code using language server. Respects project formatting configuration."
+  "Usage guidance for the format_buffer MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-lsp)
+
+(put 'claude-code-ide-extras-lsp-format-buffer-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-lsp-format-buffer-tool-name)
+
+(defcustom claude-code-ide-extras-lsp-describe-thing-at-point-usage-prompt
+  "Get type information and documentation from LSP. Requires LSP server running for the file."
+  "Usage guidance for the describe_thing_at_point MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-lsp)
+
+(put 'claude-code-ide-extras-lsp-describe-thing-at-point-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-lsp-describe-thing-at-point-tool-name)
+
 ;;; Tool implementations
 
   (defun claude-code-ide-extras-lsp--format-buffer (file-path)
@@ -109,7 +141,7 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-lsp--format-buffer
-   :name "claude-code-ide-extras-lsp/format_buffer"
+   :name claude-code-ide-extras-lsp-format-buffer-tool-name
    :description "Format a specific file using LSP formatting. Requires an absolute file path."
    :args '((:name "file_path"
             :type string
@@ -117,7 +149,7 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-lsp--describe-thing-at-point
-   :name "claude-code-ide-extras-lsp/describe_thing_at_point"
+   :name claude-code-ide-extras-lsp-describe-thing-at-point-tool-name
    :description "Get LSP hover information (type signature and documentation) at a specific location. Returns formatted text with type, parameters, and docstring."
    :args '((:name "file_path"
             :type string

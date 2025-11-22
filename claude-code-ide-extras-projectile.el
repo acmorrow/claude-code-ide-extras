@@ -48,6 +48,108 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-projectile-")
 
+;;; MCP Tool Names
+
+(defconst claude-code-ide-extras-projectile-read-dir-locals-tool-name
+  "claude-code-ide-extras-projectile/read_dir_locals"
+  "MCP tool name for read_dir_locals.")
+
+(defconst claude-code-ide-extras-projectile-read-project-dir-locals-tool-name
+  "claude-code-ide-extras-projectile/read_project_dir_locals"
+  "MCP tool name for read_project_dir_locals.")
+
+(defconst claude-code-ide-extras-projectile-task-start-tool-name
+  "claude-code-ide-extras-projectile/task_start"
+  "MCP tool name for task_start.")
+
+(defconst claude-code-ide-extras-projectile-task-wait-tool-name
+  "claude-code-ide-extras-projectile/task_wait"
+  "MCP tool name for task_wait.")
+
+(defconst claude-code-ide-extras-projectile-task-query-tool-name
+  "claude-code-ide-extras-projectile/task_query"
+  "MCP tool name for task_query.")
+
+(defconst claude-code-ide-extras-projectile-task-kill-tool-name
+  "claude-code-ide-extras-projectile/task_kill"
+  "MCP tool name for task_kill.")
+
+(defconst claude-code-ide-extras-projectile-task-search-tool-name
+  "claude-code-ide-extras-projectile/task_search"
+  "MCP tool name for task_search.")
+
+;;; Customization
+
+(defcustom claude-code-ide-extras-projectile-task-start-usage-prompt
+  "Launches builds, tests, or commands. Use 'run' type for arbitrary shell commands."
+  "Usage guidance for the task_start MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-task-start-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-task-start-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-task-wait-usage-prompt
+  "Poll for task completion before querying output."
+  "Usage guidance for the task_wait MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-task-wait-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-task-wait-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-task-query-usage-prompt
+  "Retrieve task output. Use line ranges for large results."
+  "Usage guidance for the task_query MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-task-query-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-task-query-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-task-search-usage-prompt
+  "Search task output for patterns. Useful for finding errors."
+  "Usage guidance for the task_search MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-task-search-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-task-search-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-task-kill-usage-prompt
+  "Terminate running tasks that hang or take too long."
+  "Usage guidance for the task_kill MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-task-kill-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-task-kill-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-read-dir-locals-usage-prompt
+  "Read file-local configuration variables for a specific file."
+  "Usage guidance for the read_dir_locals MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-read-dir-locals-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-read-dir-locals-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
+  "Read project-wide configuration. Check for build commands and project settings."
+  "Usage guidance for the read_project_dir_locals MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-read-project-dir-locals-tool-name)
+
 ;;; Tool implementations
 
   ;; Custom MCP tools for reading dir-locals
@@ -204,7 +306,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--read-dir-locals
-   :name "claude-code-ide-extras-projectile/read_dir_locals"
+   :name claude-code-ide-extras-projectile-read-dir-locals-tool-name
    :description "Read buffer-local variables for a specific file path. Opens the file and returns buffer-local-variables as a Lisp form."
    :args '((:name "file_path"
             :type string
@@ -212,7 +314,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--read-project-dir-locals
-   :name "claude-code-ide-extras-projectile/read_project_dir_locals"
+   :name claude-code-ide-extras-projectile-read-project-dir-locals-tool-name
    :description "Read buffer-local variables for the project root containing a file. Finds the project root via projectile/project.el, then returns buffer-local-variables as a Lisp form."
    :args '((:name "file_path"
             :type string
@@ -221,7 +323,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
   ;; Register the projectile task MCP tools
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-start
-   :name "claude-code-ide-extras-projectile/task_start"
+   :name claude-code-ide-extras-projectile-task-start-tool-name
    :description "Start a projectile task (compile, test, configure, install, package, run) for a project. Non-blocking - returns immediately with the compilation buffer name. Use projectile_task_wait to poll for completion, then projectile_task_query to retrieve output. Requires projectile-per-project-compilation-buffer to be enabled."
    :args '((:name "task_type"
             :type string
@@ -235,7 +337,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-wait
-   :name "claude-code-ide-extras-projectile/task_wait"
+   :name claude-code-ide-extras-projectile-task-wait-tool-name
    :description "Poll for projectile task completion and get output size. Returns 'running' if still executing, or 'finished' with line/character count when done. Use this to poll after projectile_task_start, then use the size info to decide whether to retrieve full output or use head/tail limiting with projectile_task_query."
    :args '((:name "buffer_name"
             :type string
@@ -243,7 +345,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-query
-   :name "claude-code-ide-extras-projectile/task_query"
+   :name claude-code-ide-extras-projectile-task-query-tool-name
    :description "Retrieve compilation output from a finished task. Should only be called after projectile_task_wait indicates the task is finished. Returns full output if no range specified, or limited output if start_line and num_lines are provided (both required). Supports negative start_line to count from end."
    :args '((:name "buffer_name"
             :type string
@@ -259,7 +361,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-kill
-   :name "claude-code-ide-extras-projectile/task_kill"
+   :name claude-code-ide-extras-projectile-task-kill-tool-name
    :description "Kill a running compilation in the specified buffer. Equivalent to pressing C-c C-k in the compilation buffer."
    :args '((:name "buffer_name"
             :type string
@@ -267,7 +369,7 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-search
-   :name "claude-code-ide-extras-projectile/task_search"
+   :name claude-code-ide-extras-projectile-task-search-tool-name
    :description "Search for a pattern in projectile task/compilation output. Returns matching lines with optional context. Use this to find specific errors, warnings, or log output without retrieving the entire output."
    :args '((:name "buffer_name"
             :type string
