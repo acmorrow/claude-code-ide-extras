@@ -42,6 +42,9 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-meta-")
 
+(defconst claude-code-ide-extras-meta-version "0.0.0"
+  "Version of claude-code-ide-extras-meta.")
+
 ;;; MCP Tool Names
 
 (defconst claude-code-ide-extras-meta-get-mcp-custom-advice-tool-name

@@ -48,6 +48,9 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-projectile-")
 
+(defconst claude-code-ide-extras-projectile-version "0.0.0"
+  "Version of claude-code-ide-extras-projectile.")
+
 ;;; MCP Tool Names
 
 (defconst claude-code-ide-extras-projectile-read-dir-locals-tool-name

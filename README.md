@@ -22,12 +22,17 @@ Semantic code understanding via LSP integration:
 - Hover information and type signatures
 - Documentation lookup at point
 
-**claude-code-ide-extras-core**
+**claude-code-ide-extras-emacs**
 Emacs introspection and buffer access:
 - Function and variable documentation
 - Command and symbol discovery
 - Documentation search across all loaded packages
 - Direct buffer read and search capabilities
+
+**claude-code-ide-extras-meta**
+Meta-level tools about the MCP tools themselves:
+- Customizable per-tool usage guidance
+- Project-specific configuration via dir-locals
 
 **claude-code-ide-extras-common** (internal library)
 Shared utilities used by other packages. Not intended for direct use.
@@ -51,8 +56,9 @@ Install from local checkout using package-vc:
 
 ```elisp
 (let ((extras-dir (expand-file-name "dev/claude-code-ide-extras" user-emacs-directory)))
-  (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-core")
+  (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-emacs")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-lsp")
+  (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-meta")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-projectile")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras"))
 
@@ -81,16 +87,16 @@ Once published to MELPA:
 Install only the packages you need:
 
 ```elisp
-(use-package claude-code-ide-extras-core
+(use-package claude-code-ide-extras-emacs
   :after claude-code-ide
   :demand t
   :config
-  (claude-code-ide-extras-core-setup))
+  (claude-code-ide-extras-emacs-setup))
 ```
 
 ## Available Tools
 
-### Projectile (6 tools)
+### Projectile (7 tools)
 
 **task_start** - Launch project tasks (compile, test, configure, install, package, run)
 Returns immediately with buffer name while task runs asynchronously.
@@ -116,7 +122,7 @@ Discovers project-specific build commands and configuration.
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Core (6 tools)
+### Emacs (6 tools)
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -132,6 +138,11 @@ Line-range queries with 1-based indexing and negative offset support. Enables sc
 
 **buffer_search** - Search any Emacs buffer with regex
 Search compilation, scratch, messages, or any other buffer with optional context lines.
+
+### Meta (1 tool)
+
+**get_mcp_custom_advice** - Retrieve project-specific tool usage guidance
+Reads customization variables configured via :custom or .dir-locals.el, returning guidance for all registered MCP tools.
 
 ## Usage Examples
 
@@ -172,6 +183,28 @@ Claude uses:
 2. describe - read documentation for specific functions
 ```
 
+## Security Model
+
+This package grants Claude access to:
+- **Execute arbitrary shell commands** in project context via `task_start`
+- **Read any Emacs buffer** including scratch buffers, compilation output, and logs
+- **Format and modify files** via LSP integration
+
+**Intended use**: Personal development environments and work machines with trusted projects and codebases.
+
+**Not suitable for**: Shared machines, untrusted codebases, production servers, or environments with sensitive data in Emacs buffers.
+
+### Trust Model
+
+The security philosophy is: "Claude is your pair programmer with the same access you have."
+
+- **No sandboxing**: Shell commands execute with full user privileges
+- **No secrets filtering**: Could read `.env`, credentials files, or sensitive buffers if accessed
+- **No audit trail**: Commands are not logged (relies on shell history)
+- **Trust-based execution**: Assumes you trust both Claude and the projects you work on
+
+This model is appropriate for personal development workflows where you would grant the same access to a human pair programmer.
+
 ## Architecture
 
 The package suite uses a layered architecture:
@@ -185,3 +218,5 @@ All tool implementations use `claude-code-ide-mcp-server-with-session-context` t
 ## License
 
 GPL-3.0-or-later
+
+See [LICENSE](LICENSE) for full license text.
