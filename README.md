@@ -1,6 +1,75 @@
 # claude-code-ide-extras
 
-MCP tool extensions for [claude-code-ide.el](https://github.com/manzaltu/claude-code-ide.el).
+Additional Emacs MCPs for [claude-code-ide.el](https://github.com/manzaltu/claude-code-ide.el).
+
+## "Author's" Note
+
+This repository was written by, for, and with Claude Code, in Emacs,
+using `claude-code-ide.el`. However, any mistakes are mine.
+
+This project started when I got frustrated watching Claude Code
+running in a `claude-code-ide.el` session repeatedly run
+compilation/tests in `Bash` tool invocations while failing to converge
+on a solution. I couldn't see the same results it saw. It seemed to me
+that it would be better if it would just re-use my existing projectile
+compilation buffer, so we had a shared understanding and I could
+interrupt it and steer it in the right direction when it was going off
+the rails. So, I started developing the `extras-projectile`
+functionality. Given my limited elisp skills, it was natural to have
+Claude Code do what it does.
+
+While iterating on those tools, it became apparent that Claude Code
+didn't always have a great understanding of the various Emacs
+APIs. Given the self-documenting nature of Emacs, it again seemed
+obvious that tools could be provided to allow Claude Code to interact
+with the `describe` and `apropos` subsystems. This made it much easier
+to steer Claude in the right direction while developing these tools. I
+could ask it to study `projectile-per-project-compilation-buffer` and
+it would now be able to make use of that symbol. So the `extras-emacs`
+package started there. At some point, the buffer search and query
+tools that had originally been developed as part of the
+`extras-projectile` package moved here and were generalized to allow
+interaction with any buffer: there were times I wanted Claude Code to
+be able to meditate on content from the `*Messages*` buffer, for
+instance.
+
+The `extras-lsp` commands were natural extensions to the LSP MCPs that
+come with `claude-code-ide.el`. In particular, giving Claude Code the
+ability to run the formatter in Emacs avoids irritating back and forth
+between Claude Code and the formatter.
+
+At some point I noticed that I'd written fairly extensive guidance for
+Claude Code on how to use these tools into my personal `CLAUDE.md`
+files. Allowing the tool guidance to live in Emacs customizations was
+an obvious next step: you do need to explain to Claude Code how and
+when to use these tools, everyone will have different guidance, and
+the guidance is for this package. Each tool has a customizable usage
+guidance `defcustom`, and there is a meta MCP that collates the
+content for each active tool. You can customize this globally using
+`:custom`, and then also override it using `dir-locals` or augment it
+with per-project notes in your `CLAUDE.md` files. You do need at least
+one `CLAUDE.md` that exhorts Claude Code to run the meta MCP to learn
+of the others, or you can put that in a custom slash command. The
+default guidance is minimal and should almost certainly be customized.
+
+I have ideas for several other tools to give Claude Code deeper
+integration with Emacs, including the ability to directly create and
+edit buffers, additional LSP integrations, and potentially just
+directly eval elisp.
+
+Finally, a note on security: there is none. As I started writing these
+tools, I kept writing down notes on how I should later come back and
+"secure" various parts of this. In the end, I was convinced that this
+was entirely security theater. As soon as Claude Code has access to
+the `Bash` tool it is game over for anything in its reachable
+environment. In particular, the `Bash` tool can run `emacsclient -e
+EVIL` to run any evil elisp it wants inside your running Emacs
+session. If Claude Code wants to own you or anything your Emacs
+session can reach, it has had that full power from the first time you
+ran it and granted it permissions to run the `Bash` tool. Take
+appropriate precautions.
+
+The remainder of this `README.md` was written by Claude Code.
 
 ## Overview
 
