@@ -64,12 +64,17 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
         (unwind-protect
             (save-window-excursion
               (progn
-                ;; Run occur - creates new *Occur*
+                ;; Run occur - creates new *Occur* only if matches found
                 (with-current-buffer buf
                   (occur pattern (or context-lines 0)))
-                ;; Read from the new *Occur* buffer
-                (with-current-buffer "*Occur*"
-                  (buffer-substring-no-properties (point-min) (point-max)))))
+                ;; Check if *Occur* buffer was created (only happens with matches)
+                (let ((occur-buf (get-buffer "*Occur*")))
+                  (if occur-buf
+                      ;; Matches found - read the results
+                      (with-current-buffer occur-buf
+                        (buffer-substring-no-properties (point-min) (point-max)))
+                    ;; No matches found - occur didn't create buffer
+                    "0 matches found"))))
           ;; Clean up: kill our *Occur*, restore saved one
           (when (get-buffer "*Occur*")
             (kill-buffer "*Occur*"))
