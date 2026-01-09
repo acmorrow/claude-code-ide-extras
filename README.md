@@ -191,7 +191,7 @@ Discovers project-specific build commands and configuration.
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Emacs (6 tools)
+### Emacs (13 tools)
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -207,6 +207,27 @@ Line-range queries with 1-based indexing and negative offset support. Enables sc
 
 **buffer_search** - Search any Emacs buffer with regex
 Search compilation, scratch, messages, or any other buffer with optional context lines.
+
+**read_dir_locals** - Read buffer-local variables for a file
+Opens file and returns buffer-local-variables as a Lisp form.
+
+**eval_elisp** - Execute arbitrary elisp code
+Powerful tool for exploring Emacs state, testing code, and iteratively redefining functions.
+
+**eval_region** - Evaluate elisp region in a buffer
+Takes buffer name, start/end line and column, evaluates the code and returns result.
+
+**eval_defun_at_point** - Evaluate function definition at point
+Essential for reloading function definitions during iterative development.
+
+**find_file** - Open file into buffer
+Opens file without displaying it. Required before using LSP tools on edited files.
+
+**position_point** - Move and restore point position
+Set action moves point and returns token. Restore action returns point to saved position.
+
+**select_region** - Select region in buffer
+Sets mark and point, activating region. Use with eval-elisp to call functions on the region.
 
 ### Meta (1 tool)
 
@@ -250,6 +271,37 @@ User: "How does compilation-mode work?"
 Claude uses:
 1. apropos - find compilation-related symbols
 2. describe - read documentation for specific functions
+```
+
+### Interactive Development
+
+Claude can iteratively develop and test elisp functions:
+
+```
+User: "Add error handling to the parse-config function"
+
+Claude uses:
+1. find_file - open the elisp file into buffer
+2. position_point (set) - move to function, get token
+3. Read tool - view function definition
+4. Edit tool - modify function with error handling
+5. eval_defun_at_point - reload the modified function
+6. eval_elisp - test the function with sample data
+7. position_point (restore) - return point to original position
+8. lsp/format_buffer - format the modified code
+```
+
+### Region Operations
+
+Claude can select and operate on code regions:
+
+```
+User: "Comment out lines 50-60 in buffer.el"
+
+Claude uses:
+1. find_file - ensure file is open
+2. select_region - mark lines 50-60
+3. eval_elisp - call (comment-region (region-beginning) (region-end))
 ```
 
 ## Customizing Tool Guidance
