@@ -153,12 +153,29 @@ Finds the project root and delegates to
                                   (when-let ((proj (project-current)))
                                     (project-root proj))
                                   default-directory))
-                 ;; Use a dummy file in the project root
+                 ;; Need a concrete file path to query for buffer-local-variables,
+                 ;; but cannot assume any particular file exists in the project root
+                 ;; (no .git, no README, no consistent filename across projects).
+                 ;; Create a dummy "probe" file path; find-file-noselect will create
+                 ;; an empty buffer even if the file doesn't exist on disk, which is
+                 ;; sufficient to trigger dir-locals loading.
+                 ;;
+                 ;; The probe file name doesn't matter - it just needs to be in the
+                 ;; project root directory so dir-locals.el in that directory (and
+                 ;; parent directories) will be loaded.
+                 ;;
+                 ;; Using a dired buffer for the project-root directory was considered
+                 ;; but rejected because dired-mode buffers have different buffer-local
+                 ;; behavior and may not properly load all dir-locals. File-visiting
+                 ;; buffers are more reliable for this purpose.
                  (probe-file (expand-file-name ".dir-locals-probe" project-root))
                  (buffer (find-file-noselect probe-file)))
             (unwind-protect
                 (with-current-buffer buffer
                   (format "%S" (buffer-local-variables)))
+              ;; Always kill the probe buffer - we don't want it cluttering the
+              ;; buffer list or confusing users. It was only created to trigger
+              ;; dir-locals loading.
               (kill-buffer buffer)))
         (error (format "Error reading project dir-locals: %s" (error-message-string err))))))
 

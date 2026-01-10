@@ -96,8 +96,21 @@ FILE-PATH must be an absolute path to the file to format."
                 (format "Error: LSP mode not active in buffer for file: %s" file-path)
               (condition-case err
                   (progn
+                    ;; Format the buffer in place using LSP server
                     (lsp-format-buffer)
+
+                    ;; Save automatically after formatting. Claude's intent is to format
+                    ;; the FILE (persistent), not just the buffer (temporary), so auto-save
+                    ;; makes this explicit. Leaving the buffer modified creates confusing
+                    ;; state for the user - they see a modified indicator but didn't make
+                    ;; the edit. Some LSP operations (diagnostics, indexing) may also depend
+                    ;; on the file-on-disk being up to date with buffer contents. If
+                    ;; formatting fails, the error propagates and the file remains unchanged
+                    ;; (no partial save). Not saving and letting Claude call a separate save
+                    ;; tool was considered but rejected because it adds complexity for no
+                    ;; benefit since the 99% case is "format then save immediately".
                     (save-buffer)
+
                     (format "Successfully formatted and saved: %s" (buffer-file-name)))
                 (error (format "Error formatting %s: %s"
                               file-path
@@ -120,16 +133,27 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
                   (goto-char (point-min))
                   (forward-line (1- line))
                   (move-to-column column)
-                  ;; Get hover contents from LSP
+
+                  ;; Query LSP server for hover information at current position. Uses
+                  ;; the LSP textDocument/hover protocol: construct the request with
+                  ;; file URI and line/column position, wrap it in LSP request format,
+                  ;; send it to the language server, wait for response, and extract the
+                  ;; content. The language server returns hover contents in either plain
+                  ;; text or markdown format, plus optional syntax-highlighted code blocks.
                   (let ((contents (-some->> (lsp--text-document-position-params)
                                     (lsp--make-request "textDocument/hover")
                                     (lsp--send-request)
                                     (lsp:hover-contents))))
                     (if (and contents (not (equal contents "")))
-                        ;; Render the hover content as text (same as lsp--display-contents does)
+                        ;; Render hover content as plain text. lsp--render-on-hover-content
+                        ;; handles conversion from markdown/markup to readable text.
+                        ;; Split and trim to clean up formatting artifacts.
                         (mapconcat 'string-trim-right
                                    (split-string (lsp--render-on-hover-content contents t) "\n")
                                    "\n")
+                      ;; No hover info: either position is not on a symbol, or
+                      ;; language server doesn't have information for this symbol.
+                      ;; This is normal for whitespace, comments, or undeclared symbols.
                       (format "No hover information at %s:%d:%d" file-path line column))))
               (error
                (format "Error getting hover info at %s:%d:%d: %s"

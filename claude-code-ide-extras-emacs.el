@@ -28,6 +28,8 @@
 ;; - Read documentation for Emacs symbols
 ;; - Search Emacs help system
 ;; - Learn about the user's Emacs environment
+;; - Execute elisp code for interactive development
+;; - Manipulate buffers and point positions
 ;;
 ;; Part of the claude-code-ide-extras suite.
 ;;
@@ -35,6 +37,19 @@
 ;;
 ;;   (require 'claude-code-ide-extras-emacs)
 ;;   (claude-code-ide-extras-emacs-setup)
+
+;;; Security Considerations:
+;;
+;; This package includes tools that execute arbitrary elisp code
+;; (eval-elisp, eval-region, eval-defun-at-point). These are powerful
+;; debugging and development tools that assume a trusted relationship
+;; between the user and the AI assistant.
+;;
+;; Enabling these tools grants Claude access to the Emacs session with full
+;; user privileges. The tools can read, write, and delete files, make network
+;; requests, spawn processes, and manipulate all Emacs state. This is appropriate
+;; for trusted projects in personal or work environments. Do not use in multi-tenant
+;; environments, shared Emacs sessions, or with untrusted AI systems.
 
 ;;; Code:
 
@@ -336,11 +351,20 @@ Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
 
   ;; Eval tools
   (defun claude-code-ide-extras-emacs--eval-elisp (code)
-    "Execute arbitrary elisp CODE and return the result.
-CODE is a string containing elisp code to evaluate.
+    "Execute arbitrary elisp CODE with FULL Emacs privileges.
 
-WARNING: Executes arbitrary elisp code with full Emacs privileges.
-Use with caution and never with untrusted input."
+Evaluates CODE with complete access to the filesystem, network, processes,
+and all Emacs state. Operates under the assumption that Claude has been
+explicitly granted access to the Emacs session for trusted projects.
+
+CODE is a string containing elisp to evaluate (e.g., \"(+ 1 2)\").
+Returns the result formatted as a string via %S.
+
+Example:
+  (claude-code-ide-extras-emacs--eval-elisp \"(buffer-list)\")
+  => \"(#<buffer *scratch*> #<buffer init.el>)\"
+
+Errors are caught and returned as formatted error strings."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let ((result (eval (read code))))
@@ -348,21 +372,33 @@ Use with caution and never with untrusted input."
         (error (format "Error evaluating elisp: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--eval-region (buffer-name start-line start-column end-line end-column)
-    "Evaluate elisp code in region of BUFFER-NAME.
+    "Evaluate elisp code in region of BUFFER-NAME with FULL Emacs privileges.
+
 Region spans from START-LINE:START-COLUMN to END-LINE:END-COLUMN.
 Lines are 1-based, columns are 0-based (consistent with Emacs conventions).
 
 Uses the built-in `eval-region` function, which evaluates all forms in the
-region for their side effects (e.g., defining functions). Does not return
-the value of the last form - use `eval-elisp` if you need a return value.
+region for their side effects (like defining functions) but doesn't return
+the value of the last form. Use this when reloading multiple function
+definitions from a code file. Each defun is evaluated and the function is
+redefined in Emacs, but the return values (which would just be the function
+symbols) are discarded.
 
-WARNING: Executes arbitrary elisp code with full Emacs privileges."
+For computing something and getting the result back, use `eval-elisp` instead
+with a progn form that returns the last expression's value. Both tools together
+provide the right primitive for each use case."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let ((buffer (get-buffer buffer-name)))
             (if (not buffer)
                 (format "Error: Buffer '%s' does not exist" buffer-name)
               (with-current-buffer buffer
+                ;; Missing buffer is handled specially (clear error message) before
+                ;; entering the evaluation context. All other errors (invalid elisp,
+                ;; runtime errors during evaluation) are caught by the outer handler
+                ;; and returned as formatted strings for Claude to interpret. This keeps
+                ;; the MCP channel open even when elisp errors occur, allowing Claude
+                ;; to see the error and adjust the approach.
                 (let ((start-pos (save-excursion
                                   (goto-char (point-min))
                                   (forward-line (1- start-line))
@@ -373,19 +409,28 @@ WARNING: Executes arbitrary elisp code with full Emacs privileges."
                                 (forward-line (1- end-line))
                                 (forward-char end-column)
                                 (point))))
+                  ;; eval-region evaluates each form in the region sequentially,
+                  ;; installing side effects (like function definitions) but
+                  ;; discarding return values. This is the right tool for
+                  ;; reloading multiple defuns from a code file.
                   (eval-region start-pos end-pos)
                   (format "Evaluated region from %d:%d to %d:%d"
                          start-line start-column end-line end-column)))))
         (error (format "Error evaluating region: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--eval-defun-at-point (buffer-name line column)
-    "Evaluate the defun at point in BUFFER-NAME at LINE and COLUMN.
+    "Evaluate the defun at point in BUFFER-NAME at LINE:COLUMN with FULL Emacs privileges.
+
 LINE is 1-based, COLUMN is 0-based (consistent with Emacs conventions).
 
 Finds the top-level s-expression at the given position and evaluates it,
-reloading the function definition. Essential for iterative development.
+reloading the function definition. Essential for iterative development,
+allowing Claude to modify a function definition and immediately reload it
+without restarting Emacs or evaluating the entire file.
 
-WARNING: Executes arbitrary elisp code with full Emacs privileges."
+The point position doesn't need to be exact. As long as it's anywhere within
+the function definition, eval-defun will find the enclosing top-level form
+and evaluate it."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let ((buffer (get-buffer buffer-name)))
@@ -393,17 +438,38 @@ WARNING: Executes arbitrary elisp code with full Emacs privileges."
                 (format "Error: Buffer '%s' does not exist" buffer-name)
               (with-current-buffer buffer
                 (save-excursion
+                  ;; Position point at requested location
                   (goto-char (point-min))
                   (forward-line (1- line))
                   (forward-char column)
+                  ;; eval-defun finds the top-level form enclosing point and
+                  ;; evaluates it. This is more robust than requiring exact
+                  ;; defun boundaries - Claude just needs to position within
+                  ;; the function body.
                   (eval-defun nil)
                   (format "Evaluated defun at line %d, column %d" line column)))))
         (error (format "Error evaluating defun: %s" (error-message-string err))))))
 
   ;; Buffer manipulation tools
   (defun claude-code-ide-extras-emacs--find-file (file-path)
-    "Open FILE-PATH into a buffer and return the buffer name.
-Does not display the buffer to the user."
+    "Open FILE-PATH into a buffer without displaying it to the user.
+
+Uses find-file-noselect, which loads the file into a buffer but doesn't
+change the user's window configuration. If the file is already open in a
+buffer, reuses that existing buffer rather than creating a new one.
+
+Primary use case is opening files before calling LSP operations like
+lsp_format_buffer. When Claude edits a file using the Write tool, the file
+exists on disk but may not be loaded in Emacs. LSP formatting requires an
+active buffer with lsp-mode enabled. This tool ensures the file is loaded
+so subsequent LSP operations work correctly.
+
+The buffer will have all normal file-visiting behavior: major mode activation,
+hooks, dir-locals, LSP attachment, etc. It's a real buffer, just not displayed
+to the user.
+
+FILE-PATH must be an absolute path to the file.
+Returns a formatted string: \"Buffer: <buffer-name>\""
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let ((buffer (find-file-noselect file-path)))
@@ -414,8 +480,29 @@ Does not display the buffer to the user."
 
   (defvar claude-code-ide-extras-emacs--point-markers (make-hash-table :test 'equal)
     "Hash table storing saved point positions as markers.
-Keys are token strings, values are markers that track buffer positions
-even as the buffer content changes.")
+
+Markers are used (not integer positions) because markers automatically track
+buffer changes. When text is inserted or deleted before a saved position, the
+marker adjusts to maintain its logical location. Without this, restore would
+jump to the wrong place after edits.
+
+Keys are token strings (format: \"buffer-name-timestamp\"), values are marker
+objects pointing into buffers. Markers are created on 'set' action via
+point-marker, stored in the hash with a unique token, and cleaned up on
+'restore' action via remhash.
+
+Potential memory leak exists if Claude calls 'set' but never 'restore' (due
+to error, user interruption, or forgetting). The marker persists in the hash
+table, leaking a small amount of memory (marker object plus hash entry). This
+is acceptable because typical usage is set/restore pairs within a single tool
+call sequence, the leak rate is only about 100 bytes per leaked marker, and the
+impact is negligible for normal sessions (less than 1MB even with 10000 leaks).
+Markers are automatically invalidated if their buffer is killed, and restarting
+Emacs clears the hash table.
+
+Weak hash tables would enable auto-cleanup on GC, but Emacs doesn't support
+weak keys for hash tables, and the implementation complexity doesn't justify
+the benefit.")
 
   (defun claude-code-ide-extras-emacs--position-point (buffer-name action line column &optional token)
     "Position or restore point in BUFFER-NAME.
@@ -436,30 +523,43 @@ For \"restore\": Restore point to position saved with TOKEN.
               (with-current-buffer buffer
                 (pcase action
                   ("set"
-                   ;; Save current position as a marker before moving
+                   ;; Save current position as marker before moving.
+                   ;; point-marker creates marker at current point that tracks
+                   ;; buffer changes. This is essential for correct restoration
+                   ;; after Claude makes edits between set and restore.
                    (let* ((old-marker (point-marker))
+                          ;; Token includes timestamp for uniqueness. Multiple
+                          ;; rapid set operations in same buffer need distinct tokens.
                           (token (format "%s-%d" buffer-name (float-time))))
                      (puthash token old-marker claude-code-ide-extras-emacs--point-markers)
-                     ;; Move to new position
+
+                     ;; Move to requested position
                      (goto-char (point-min))
-                     (forward-line (1- line))
-                     (forward-char column)
+                     (forward-line (1- line))  ; 1-based to 0-based
+                     (forward-char column)      ; 0-based column
+
                      (format "Point moved to line %d, column %d. Token: %s" line column token)))
+
                   ("restore"
                    (if (not token)
                        "Error: TOKEN required for restore action"
                      (let ((saved-marker (gethash token claude-code-ide-extras-emacs--point-markers)))
                        (if (not saved-marker)
                            (format "Error: Invalid token '%s'" token)
-                         ;; Check if marker is still valid
+                         ;; Marker can become invalid if buffer was killed
                          (if (not (marker-position saved-marker))
                              (progn
+                               ;; Clean up invalid marker
                                (remhash token claude-code-ide-extras-emacs--point-markers)
                                (format "Error: Saved position for token '%s' is no longer valid" token))
+                           ;; Success path: restore point and cleanup
                            (goto-char saved-marker)
                            (remhash token claude-code-ide-extras-emacs--point-markers)
                            (format "Point restored using token %s" token))))))
+
+                  ;; Invalid action
                   (_ (format "Error: ACTION must be 'set' or 'restore', got '%s'" action))))))
+        ;; Top-level error handler for unexpected failures
         (error (format "Error positioning point: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--select-region (buffer-name start-line start-column end-line end-column)

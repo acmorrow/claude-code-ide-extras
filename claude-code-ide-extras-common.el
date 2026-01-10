@@ -56,28 +56,43 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
   (let ((buf (get-buffer buffer-name)))
     (if (not buf)
         (format "Error: Buffer not found: %s" buffer-name)
+
+      ;; Occur always creates or reuses a buffer named "*Occur*". If the user
+      ;; has existing occur results visible, preserve them to avoid clobbering
+      ;; the user's interactive work. Temporarily rename any existing *Occur*
+      ;; buffer, run the search, extract the results, and then restore the
+      ;; original. This isolation ensures Claude's searches don't interfere
+      ;; with the user's workflow.
       (let ((saved-occur-buf (get-buffer "*Occur*")))
-        ;; Save any existing *Occur* buffer by renaming it temporarily
+        ;; Preserve any existing *Occur* buffer by renaming it.
         (when saved-occur-buf
           (with-current-buffer saved-occur-buf
             (rename-buffer (generate-new-buffer-name "*Occur*") t)))
+
         (unwind-protect
+            ;; Run the search in an isolated window environment. save-window-excursion
+            ;; prevents occur from changing the user's window layout.
             (save-window-excursion
               (progn
-                ;; Run occur - creates new *Occur* only if matches found
+                ;; Occur creates the *Occur* buffer only if matches are found.
                 (with-current-buffer buf
                   (occur pattern (or context-lines 0)))
-                ;; Check if *Occur* buffer was created (only happens with matches)
+
+                ;; Extract results if matches were found.
                 (let ((occur-buf (get-buffer "*Occur*")))
                   (if occur-buf
-                      ;; Matches found - read the results
+                      ;; Success path: matches found, buffer created.
                       (with-current-buffer occur-buf
                         (buffer-substring-no-properties (point-min) (point-max)))
-                    ;; No matches found - occur didn't create buffer
+                    ;; No matches: occur didn't create a buffer.
                     "0 matches found"))))
-          ;; Clean up: kill our *Occur*, restore saved one
+
+          ;; Cleanup - always restore original state, even on error.
+          ;; Kill our temporary *Occur* buffer.
           (when (get-buffer "*Occur*")
             (kill-buffer "*Occur*"))
+
+          ;; Restore the user's original *Occur* buffer if it existed.
           (when saved-occur-buf
             (with-current-buffer saved-occur-buf
               (rename-buffer "*Occur*"))))))))
@@ -98,40 +113,56 @@ Lines longer than `claude-code-ide-extras-common-max-line-length'
 are truncated.
 Returns the buffer contents for the specified line range."
   (let ((buf (get-buffer buffer-name)))
+    ;; Validate buffer exists.
     (if (not buf)
         (format "Error: Buffer not found: %s" buffer-name)
-      ;; Validate parameters
+
+      ;; Validate parameter consistency. Range parameters are all-or-nothing to
+      ;; avoid ambiguity. Requiring both ensures clear semantics: either "all
+      ;; content" or "specific range", never "partial range specification".
       (when (or (and start-line (not num-lines))
                 (and num-lines (not start-line)))
         (error "start-line and num-lines must both be provided or both be omitted"))
       (with-current-buffer buf
         (save-excursion
           (if (not start-line)
-              ;; No range specified - return whole buffer
+              ;; Extract entire buffer. Simple case - no range calculation needed.
               (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
                      (lines (split-string content "\n" t)))
                 (string-join
                  (mapcar (lambda (line)
+                           ;; Truncate excessively long lines to prevent token overflow
+                           ;; in Claude's context window. Long lines are typically
+                           ;; minified code or data dumps, not useful for reasoning.
                            (if (> (length line) claude-code-ide-extras-common-max-line-length)
                                (substring line 0 claude-code-ide-extras-common-max-line-length)
                              line))
                          lines)
                  "\n"))
-            ;; Range specified - compute actual start line
+
+            ;; Extract specific range. Handle negative indexing where -1 means
+            ;; last line, -100 means 100th line from end. This matches common
+            ;; tail/head semantics and is useful for "show me last N lines of
+            ;; compilation output".
             (let* ((total-lines (count-lines (point-min) (point-max)))
                    (actual-start (if (< start-line 0)
                                      (+ total-lines start-line 1)
                                    start-line))
-                   ;; Clamp to valid range
+                   ;; Clamp to valid range - don't error on out-of-bounds, just
+                   ;; adjust to nearest valid value. This is more forgiving for
+                   ;; Claude's imprecise line count estimates.
                    (actual-start (max 1 (min actual-start total-lines))))
+
+              ;; Navigate to start position.
               (goto-char (point-min))
               (forward-line (1- actual-start))
               (let* ((start-pos (point))
+                     ;; forward-line moves point, doesn't return position.
                      (_ (forward-line num-lines))
                      (end-pos (point))
                      (content (buffer-substring-no-properties start-pos end-pos))
                      (lines (split-string content "\n" t)))
-                ;; Truncate long lines
+                ;; Apply same truncation as whole-buffer case.
                 (string-join
                  (mapcar (lambda (line)
                            (if (> (length line) claude-code-ide-extras-common-max-line-length)
