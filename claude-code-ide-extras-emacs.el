@@ -119,6 +119,14 @@
   "claude-code-ide-extras-emacs/select_region"
   "MCP tool name for select_region.")
 
+(defconst claude-code-ide-extras-emacs-xref-find-definitions-at-point-tool-name
+  "claude-code-ide-extras-emacs/xref_find_definitions_at_point"
+  "MCP tool name for xref_find_definitions_at_point.")
+
+(defconst claude-code-ide-extras-emacs-xref-find-references-at-point-tool-name
+  "claude-code-ide-extras-emacs/xref_find_references_at_point"
+  "MCP tool name for xref_find_references_at_point.")
+
 ;;; Customization
 
 (defcustom claude-code-ide-extras-emacs-describe-usage-prompt
@@ -250,6 +258,26 @@
 (put 'claude-code-ide-extras-emacs-select-region-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-emacs-select-region-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-xref-find-definitions-at-point-usage-prompt
+  "Find definition of symbol at specific location. Provides full semantic context for accurate results."
+  "Usage guidance for the xref_find_definitions_at_point MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-xref-find-definitions-at-point-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-xref-find-definitions-at-point-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-xref-find-references-at-point-usage-prompt
+  "Find all references to symbol at specific location. More reliable than string-based search."
+  "Usage guidance for the xref_find_references_at_point MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-xref-find-references-at-point-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-xref-find-references-at-point-tool-name)
 
 ;;; Tool implementations
 
@@ -594,6 +622,112 @@ the region for subsequent operations."
                          start-line start-column end-line end-column)))))
         (error (format "Error selecting region: %s" (error-message-string err))))))
 
+  ;; Xref navigation tools
+  (defun claude-code-ide-extras-emacs--xref-find-definitions-at-point (file-path line column)
+    "Find definitions of symbol at FILE-PATH:LINE:COLUMN.
+
+Positions point at the specified location, queries the xref backend for the
+symbol's identifier at that point, then asks the backend for definitions.
+This provides full semantic context, enabling accurate resolution of overloads
+and namespace-qualified names that would be ambiguous as bare strings.
+
+LINE is 1-based, COLUMN is 0-based (Emacs conventions).
+
+Returns a list of definition locations formatted as \"file:line: summary\".
+If no definitions found, returns a message indicating that."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let ((target-buffer (or (find-buffer-visiting file-path)
+                                   (find-file-noselect file-path))))
+            (with-current-buffer target-buffer
+              (save-excursion
+                ;; Position point at the requested location to establish context
+                (goto-char (point-min))
+                (forward-line (1- line))
+                (move-to-column column)
+
+                ;; Get the xref backend for this buffer (LSP, etags, elisp-mode, etc.)
+                (let ((backend (xref-find-backend)))
+                  (if (not backend)
+                      (format "No xref backend available for %s" file-path)
+                    ;; Ask backend what identifier is at current point position.
+                    ;; The backend understands the syntax and semantics of the current
+                    ;; language, returning a string identifier it can work with.
+                    (let ((identifier (xref-backend-identifier-at-point backend)))
+                      (if (not identifier)
+                          (format "No identifier at %s:%d:%d" file-path line column)
+                        ;; Query backend for definitions of this identifier.
+                        ;; Returns list of xref-item objects with location information.
+                        (let ((xref-items (xref-backend-definitions backend identifier)))
+                          (if xref-items
+                              ;; Format each xref item as "file:line: summary"
+                              (mapcar (lambda (item)
+                                        (let* ((location (xref-item-location item))
+                                               (file (xref-location-group location))
+                                               (marker (xref-location-marker location))
+                                               (line (with-current-buffer (marker-buffer marker)
+                                                       (save-excursion
+                                                         (goto-char marker)
+                                                         (line-number-at-pos))))
+                                               (summary (xref-item-summary item)))
+                                          (format "%s:%d: %s" file line summary)))
+                                      xref-items)
+                            (format "No definitions found for '%s' at %s:%d:%d"
+                                    identifier file-path line column))))))))))
+        (error (format "Error finding definitions at %s:%d:%d: %s"
+                       file-path line column (error-message-string err))))))
+
+  (defun claude-code-ide-extras-emacs--xref-find-references-at-point (file-path line column)
+    "Find references to symbol at FILE-PATH:LINE:COLUMN.
+
+Positions point at the specified location, queries the xref backend for the
+symbol's identifier at that point, then asks the backend for all references.
+Using point position provides semantic context that disambiguates overloaded
+names and resolves namespace-qualified identifiers correctly.
+
+LINE is 1-based, COLUMN is 0-based (Emacs conventions).
+
+Returns a list of reference locations formatted as \"file:line: summary\".
+If no references found, returns a message indicating that."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let ((target-buffer (or (find-buffer-visiting file-path)
+                                   (find-file-noselect file-path))))
+            (with-current-buffer target-buffer
+              (save-excursion
+                ;; Position point to establish semantic context
+                (goto-char (point-min))
+                (forward-line (1- line))
+                (move-to-column column)
+
+                ;; Get the xref backend appropriate for this buffer's language
+                (let ((backend (xref-find-backend)))
+                  (if (not backend)
+                      (format "No xref backend available for %s" file-path)
+                    ;; Ask backend for identifier at point with full semantic context
+                    (let ((identifier (xref-backend-identifier-at-point backend)))
+                      (if (not identifier)
+                          (format "No identifier at %s:%d:%d" file-path line column)
+                        ;; Query backend for all references to this identifier
+                        (let ((xref-items (xref-backend-references backend identifier)))
+                          (if xref-items
+                              ;; Format results consistently with other xref tools
+                              (mapcar (lambda (item)
+                                        (let* ((location (xref-item-location item))
+                                               (file (xref-location-group location))
+                                               (marker (xref-location-marker location))
+                                               (line (with-current-buffer (marker-buffer marker)
+                                                       (save-excursion
+                                                         (goto-char marker)
+                                                         (line-number-at-pos))))
+                                               (summary (xref-item-summary item)))
+                                          (format "%s:%d: %s" file line summary)))
+                                      xref-items)
+                            (format "No references found for '%s' at %s:%d:%d"
+                                    identifier file-path line column))))))))))
+        (error (format "Error finding references at %s:%d:%d: %s"
+                       file-path line column (error-message-string err))))))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -765,6 +899,34 @@ the region for subsequent operations."
            (:name "end_column"
             :type number
             :description "Ending column number (0-based).")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--xref-find-definitions-at-point
+   :name claude-code-ide-extras-emacs-xref-find-definitions-at-point-tool-name
+   :description "Find definitions of symbol at a specific location. Uses point position to provide full semantic context, enabling accurate resolution of overloads and namespace-qualified names. More reliable than string-based symbol search."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--xref-find-references-at-point
+   :name claude-code-ide-extras-emacs-xref-find-references-at-point-tool-name
+   :description "Find all references to symbol at a specific location. Uses point position for semantic disambiguation, making it more reliable than string-based identifier search. Essential for finding all usages of a symbol."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")))
 
   (message "Claude Code IDE Extras: Emacs tools registered"))
 

@@ -165,7 +165,7 @@ Install only the packages you need:
 
 ## Available Tools
 
-### Projectile (7 tools)
+### Projectile (8 tools)
 
 **task_start** - Launch project tasks (compile, test, configure, install, package, run)
 Returns immediately with buffer name while task runs asynchronously.
@@ -184,6 +184,9 @@ Returns matching lines with optional context.
 **read_dir_locals** / **read_project_dir_locals** - Query Emacs directory-local variables
 Discovers project-specific build commands and configuration.
 
+**get_project_files** - Enumerate all files in project
+Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore.
+
 ### LSP (2 tools)
 
 **format_buffer** - Format file using LSP formatting
@@ -191,7 +194,7 @@ Discovers project-specific build commands and configuration.
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Emacs (13 tools)
+### Emacs (15 tools)
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -228,6 +231,12 @@ Set action moves point and returns token. Restore action returns point to saved 
 
 **select_region** - Select region in buffer
 Sets mark and point, activating region. Use with eval-elisp to call functions on the region.
+
+**xref_find_definitions_at_point** - Find definitions of symbol at location
+Uses point position for full semantic context, enabling accurate resolution of overloads and namespace-qualified names. More reliable than string-based symbol search.
+
+**xref_find_references_at_point** - Find all references to symbol at location
+Point-based for semantic disambiguation. Essential for finding all usages of a symbol.
 
 ### Meta (1 tool)
 

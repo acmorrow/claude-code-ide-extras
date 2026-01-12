@@ -77,6 +77,10 @@
   "claude-code-ide-extras-projectile/task_search"
   "MCP tool name for task_search.")
 
+(defconst claude-code-ide-extras-projectile-get-project-files-tool-name
+  "claude-code-ide-extras-projectile/get_project_files"
+  "MCP tool name for get_project_files.")
+
 ;;; Customization
 
 (defcustom claude-code-ide-extras-projectile-task-start-usage-prompt
@@ -138,6 +142,16 @@
 (put 'claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-projectile-read-project-dir-locals-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-get-project-files-usage-prompt
+  "Enumerate all files in the current project. Fast using projectile cache."
+  "Usage guidance for the get_project_files MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-get-project-files-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-get-project-files-tool-name)
 
 ;;; Tool implementations
 
@@ -293,6 +307,25 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
     (claude-code-ide-mcp-server-with-session-context nil
       (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
 
+  ;; Project file enumeration
+  (defun claude-code-ide-extras-projectile--get-project-files ()
+    "Enumerate all files in the current project.
+
+Uses projectile's cached file list for speed. Returns files as a list of
+paths relative to the project root. This is much faster than using find
+because projectile maintains an up-to-date cache of project files.
+
+The file list respects projectile's ignore rules (from .projectile,
+.gitignore, etc.), so generated files and dependencies are excluded."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let ((project-root (projectile-project-root)))
+            (if (not project-root)
+                "Error: Not in a projectile project"
+              ;; projectile-current-project-files returns files relative to project root
+              (projectile-current-project-files)))
+        (error (format "Error getting project files: %s" (error-message-string err))))))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -369,6 +402,12 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
             :type number
             :description "Number of context lines to show before and after each match (optional, default 0)."
             :optional t)))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-projectile--get-project-files
+   :name claude-code-ide-extras-projectile-get-project-files-tool-name
+   :description "Enumerate all files in the current project. Returns a list of file paths relative to project root. Uses projectile's cached file list for speed, respecting ignore rules from .projectile and .gitignore."
+   :args nil)
 
   (message "Claude Code IDE Extras: Projectile tools registered"))
 
