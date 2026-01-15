@@ -39,6 +39,7 @@
 
 (require 'lsp-mode)
 (require 'claude-code-ide)
+(require 'claude-code-ide-extras-common)
 
 (defgroup claude-code-ide-extras-lsp nil
   "LSP MCP tools for claude-code-ide."
@@ -87,8 +88,7 @@
     "Format the specified file using LSP formatting.
 FILE-PATH must be an absolute path to the file to format."
     (claude-code-ide-mcp-server-with-session-context nil
-      (let ((target-buffer (or (find-buffer-visiting file-path)
-                               (find-file-noselect file-path))))
+      (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
         (if (not target-buffer)
             (format "Error: Could not open file: %s" file-path)
           (with-current-buffer target-buffer
@@ -124,8 +124,7 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
     (if (not file-path)
         (error "file_path parameter is required")
       (claude-code-ide-mcp-server-with-session-context nil
-        (let ((target-buffer (or (find-buffer-visiting file-path)
-                                 (find-file-noselect file-path))))
+        (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
           (with-current-buffer target-buffer
             (condition-case err
                 (save-excursion

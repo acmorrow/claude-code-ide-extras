@@ -544,7 +544,7 @@ FILE-PATH must be an absolute path to the file.
 Returns a formatted string: \"Buffer: <buffer-name>\""
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
-          (let ((buffer (find-file-noselect file-path)))
+          (let ((buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
             (format "Buffer: %s" (buffer-name buffer)))
         (error (format "Error opening file %s: %s"
                       file-path
@@ -681,8 +681,7 @@ Returns a list of definition locations formatted as \"file:line: summary\".
 If no definitions found, returns a message indicating that."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
-          (let ((target-buffer (or (find-buffer-visiting file-path)
-                                   (find-file-noselect file-path))))
+          (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
             (with-current-buffer target-buffer
               (save-excursion
                 ;; Position point at the requested location to establish context
@@ -735,8 +734,7 @@ Returns a list of reference locations formatted as \"file:line: summary\".
 If no references found, returns a message indicating that."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
-          (let ((target-buffer (or (find-buffer-visiting file-path)
-                                   (find-file-noselect file-path))))
+          (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
             (with-current-buffer target-buffer
               (save-excursion
                 ;; Position point to establish semantic context
