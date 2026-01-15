@@ -32,6 +32,8 @@
 
 ;;; Code:
 
+(require 'seq)
+
 (defgroup claude-code-ide-extras-common nil
   "Common utilities for claude-code-ide-extras packages."
   :group 'tools
@@ -170,6 +172,82 @@ Returns the buffer contents for the specified line range."
                              line))
                          lines)
                  "\n")))))))))
+
+;;; Buffer-local variable utilities
+
+(defun claude-code-ide-extras-common--get-buffer-local-keys (file-path &optional filter-regex)
+  "Get buffer-local variable names for FILE-PATH.
+Opens FILE-PATH and returns list of buffer-local variable names.
+Optional FILTER-REGEX (Emacs regex) filters the returned names.
+
+Only kills the buffer if it was opened by this function (not already open)."
+  ;; Validate inputs
+  (unless (and file-path (stringp file-path))
+    (error "file-path must be a non-nil string"))
+  (when (file-directory-p file-path)
+    (error "file-path must be a file, not a directory: %s" file-path))
+
+  (let* ((existing-buffer (find-buffer-visiting file-path))
+         (buffer (find-file-noselect file-path)))
+    (unwind-protect
+        (with-current-buffer buffer
+          (let* ((vars (buffer-local-variables))
+                 ;; Extract variable names (car of each pair)
+                 ;; Skip entries that aren't proper cons cells
+                 (names (delq nil
+                              (mapcar (lambda (entry)
+                                        (when (consp entry)
+                                          (symbol-name (car entry))))
+                                      vars)))
+                 ;; Apply filter if provided
+                 (filtered (if filter-regex
+                               (condition-case err
+                                   (seq-filter (lambda (name)
+                                                 (string-match-p filter-regex name))
+                                               names)
+                                 (invalid-regexp
+                                  (error "Invalid regular expression '%s': %s"
+                                         filter-regex (error-message-string err))))
+                             names)))
+            ;; Return as newline-separated list for readability
+            (string-join (sort filtered #'string<) "\n")))
+      ;; Only kill buffer if we opened it (not already open)
+      (unless existing-buffer
+        (kill-buffer buffer)))))
+
+(defun claude-code-ide-extras-common--get-buffer-local-variables (file-path &optional filter-regex)
+  "Get buffer-local variables with values for FILE-PATH.
+Opens FILE-PATH and returns buffer-local-variables as a Lisp form.
+Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values.
+
+Only kills the buffer if it was opened by this function (not already open)."
+  ;; Validate inputs
+  (unless (and file-path (stringp file-path))
+    (error "file-path must be a non-nil string"))
+  (when (file-directory-p file-path)
+    (error "file-path must be a file, not a directory: %s" file-path))
+
+  (let* ((existing-buffer (find-buffer-visiting file-path))
+         (buffer (find-file-noselect file-path)))
+    (unwind-protect
+        (with-current-buffer buffer
+          (let* ((vars (buffer-local-variables))
+                 ;; Apply filter if provided
+                 (filtered (if filter-regex
+                               (condition-case err
+                                   (seq-filter (lambda (entry)
+                                                 (and (consp entry)
+                                                      (string-match-p filter-regex
+                                                                      (symbol-name (car entry)))))
+                                               vars)
+                                 (invalid-regexp
+                                  (error "Invalid regular expression '%s': %s"
+                                         filter-regex (error-message-string err))))
+                             vars)))
+            (format "%S" filtered)))
+      ;; Only kill buffer if we opened it (not already open)
+      (unless existing-buffer
+        (kill-buffer buffer)))))
 
 (provide 'claude-code-ide-extras-common)
 ;;; claude-code-ide-extras-common.el ends here

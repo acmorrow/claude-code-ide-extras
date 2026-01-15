@@ -41,6 +41,7 @@
 (require 'projectile)
 (require 'claude-code-ide)
 (require 'claude-code-ide-extras-common)
+(require 'seq)
 
 (defgroup claude-code-ide-extras-projectile nil
   "Projectile MCP tools for claude-code-ide."
@@ -56,6 +57,14 @@
 (defconst claude-code-ide-extras-projectile-read-project-dir-locals-tool-name
   "claude-code-ide-extras-projectile/read_project_dir_locals"
   "MCP tool name for read_project_dir_locals.")
+
+(defconst claude-code-ide-extras-projectile-get-project-buffer-local-keys-tool-name
+  "claude-code-ide-extras-projectile/get_project_buffer_local_keys"
+  "MCP tool name for get_project_buffer_local_keys.")
+
+(defconst claude-code-ide-extras-projectile-get-project-buffer-local-variables-tool-name
+  "claude-code-ide-extras-projectile/get_project_buffer_local_variables"
+  "MCP tool name for get_project_buffer_local_variables.")
 
 (defconst claude-code-ide-extras-projectile-task-start-tool-name
   "claude-code-ide-extras-projectile/task_start"
@@ -82,6 +91,36 @@
   "MCP tool name for get_project_files.")
 
 ;;; Customization
+
+(defcustom claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
+  "DEPRECATED: Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. WARNING: This tool returns ALL buffer-local variables which can be very context-expensive (often 10k+ tokens). The new tools support filtering and discovery patterns."
+  "Usage guidance for the read_project_dir_locals MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-read-project-dir-locals-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-get-project-buffer-local-keys-usage-prompt
+  "List buffer-local variable names for a project. Returns only names (lightweight discovery). Optional filter_regex (Emacs regex) to narrow results. IMPORTANT: Even unfiltered, this is much cheaper than getting full variables. Use this for discovery, then get_project_buffer_local_variables with filter for specific values."
+  "Usage guidance for the get_project_buffer_local_keys MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-get-project-buffer-local-keys-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-get-project-buffer-local-keys-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-get-project-buffer-local-variables-usage-prompt
+  "Get buffer-local variables with values for a project. Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables (e.g., \"^projectile-\" or \"^\\\\(projectile\\\\|lsp\\\\)-\"). Pattern: discover with get_project_buffer_local_keys first, then retrieve filtered values."
+  "Usage guidance for the get_project_buffer_local_variables MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-get-project-buffer-local-variables-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-get-project-buffer-local-variables-tool-name)
 
 (defcustom claude-code-ide-extras-projectile-task-start-usage-prompt
   "Launches builds, tests, or commands. Use 'run' type for arbitrary shell commands."
@@ -155,46 +194,58 @@
 
 ;;; Tool implementations
 
-  ;; Custom MCP tool for reading project dir-locals
-  (defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
-    "Read effective dir-local variables for the project containing FILE-PATH.
-Finds the project root and delegates to
-`claude-code-ide-extras-projectile--read-dir-locals`."
+  ;; Custom MCP tools for reading project dir-locals
+  (defun claude-code-ide-extras-projectile--get-project-buffer-local-keys (file-path &optional filter-regex)
+    "Get buffer-local variable names for the project containing FILE-PATH.
+Finds the project root and returns list of buffer-local variable names.
+Optional FILTER-REGEX (Emacs regex) filters the returned names."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let* ((default-directory (file-name-directory file-path))
                  (project-root (or (projectile-project-root)
-                                  (when-let ((proj (project-current)))
-                                    (project-root proj))
-                                  default-directory))
-                 ;; Need a concrete file path to query for buffer-local-variables,
-                 ;; but cannot assume any particular file exists in the project root
-                 ;; (no .git, no README, no consistent filename across projects).
-                 ;; Create a dummy "probe" file path; find-file-noselect will create
-                 ;; an empty buffer even if the file doesn't exist on disk, which is
-                 ;; sufficient to trigger dir-locals loading.
-                 ;;
-                 ;; The probe file name doesn't matter - it just needs to be in the
-                 ;; project root directory so dir-locals.el in that directory (and
-                 ;; parent directories) will be loaded.
-                 ;;
-                 ;; Using a dired buffer for the project-root directory was considered
-                 ;; but rejected because dired-mode buffers have different buffer-local
-                 ;; behavior and may not properly load all dir-locals. File-visiting
-                 ;; buffers are more reliable for this purpose.
-                 (probe-file (expand-file-name ".dir-locals-probe" project-root))
-                 (buffer (find-file-noselect probe-file)))
-            (unwind-protect
-                (with-current-buffer buffer
-                  (format "%S" (buffer-local-variables)))
-              ;; Always kill the probe buffer - we don't want it cluttering the
-              ;; buffer list or confusing users. It was only created to trigger
-              ;; dir-locals loading.
-              (kill-buffer buffer)))
-        (error (format "Error reading project dir-locals: %s" (error-message-string err))))))
+                                   (when-let ((proj (project-current)))
+                                     (project-root proj)))))
+            ;; Validate project root exists
+            (unless project-root
+              (error "No project root found for file: %s" file-path))
+            ;; Validate file is under project root
+            (unless (file-in-directory-p file-path project-root)
+              (error "File %s is not under project root %s" file-path project-root))
+            ;; Use a probe file in project root to trigger dir-locals loading
+            (let ((probe-file (expand-file-name ".dir-locals-probe" project-root)))
+              ;; Delegate to the common implementation which handles buffer management
+              (claude-code-ide-extras-common--get-buffer-local-keys probe-file filter-regex)))
+        (error (format "Error reading project buffer-local keys: %s" (error-message-string err))))))
+
+  (defun claude-code-ide-extras-projectile--get-project-buffer-local-variables (file-path &optional filter-regex)
+    "Get buffer-local variables with values for the project containing FILE-PATH.
+Finds the project root and returns buffer-local-variables as a Lisp form.
+Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let* ((default-directory (file-name-directory file-path))
+                 (project-root (or (projectile-project-root)
+                                   (when-let ((proj (project-current)))
+                                     (project-root proj)))))
+            ;; Validate project root exists
+            (unless project-root
+              (error "No project root found for file: %s" file-path))
+            ;; Validate file is under project root
+            (unless (file-in-directory-p file-path project-root)
+              (error "File %s is not under project root %s" file-path project-root))
+            ;; Use a probe file in project root to trigger dir-locals loading
+            (let ((probe-file (expand-file-name ".dir-locals-probe" project-root)))
+              ;; Delegate to the common implementation which handles buffer management
+              (claude-code-ide-extras-common--get-buffer-local-variables probe-file filter-regex)))
+        (error (format "Error reading project buffer-local variables: %s" (error-message-string err))))))
+
+  (defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
+    "Read effective dir-local variables for the project containing FILE-PATH.
+DEPRECATED: Delegates to get-project-buffer-local-variables for compatibility."
+    ;; Simply delegate to the new function without filtering
+    (claude-code-ide-extras-projectile--get-project-buffer-local-variables file-path nil))
 
   ;; Custom MCP tools for projectile task management (split architecture)
-  (require 'seq)  ; For seq-take-last in task output limiting
 
   ;; Tool 1: Start a projectile task (non-blocking)
   (defun claude-code-ide-extras-projectile--task-start (task-type command file-path)
@@ -334,9 +385,33 @@ The file list respects projectile's ignore rules (from .projectile,
   (interactive)
 
   (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-projectile--get-project-buffer-local-keys
+   :name claude-code-ide-extras-projectile-get-project-buffer-local-keys-tool-name
+   :description "Get buffer-local variable names for the project root containing a file. Returns only names (lightweight discovery). Optional filter_regex (Emacs regex) to narrow results. Much cheaper than getting full variables. Use for discovery, then get_project_buffer_local_variables with filter for specific values."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to any file in the project. Project root will be determined automatically.")
+           (:name "filter_regex"
+            :type string
+            :description "Optional Emacs regular expression to filter variable names (e.g., \"^projectile-\" or \"^\\\\(projectile\\\\|lsp\\\\)-\")."
+            :optional t)))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-projectile--get-project-buffer-local-variables
+   :name claude-code-ide-extras-projectile-get-project-buffer-local-variables-tool-name
+   :description "Get buffer-local variables with values for the project root containing a file. Returns buffer-local-variables as a Lisp form. Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to any file in the project. Project root will be determined automatically.")
+           (:name "filter_regex"
+            :type string
+            :description "Optional Emacs regular expression to filter variables by name (e.g., \"^projectile-\" or \"^\\\\(projectile\\\\|lsp\\\\)-\")."
+            :optional t)))
+
+  (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--read-project-dir-locals
    :name claude-code-ide-extras-projectile-read-project-dir-locals-tool-name
-   :description "Read buffer-local variables for the project root containing a file. Finds the project root via projectile/project.el, then returns buffer-local-variables as a Lisp form."
+   :description "DEPRECATED: Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Read buffer-local variables for the project root containing a file. Finds the project root via projectile/project.el, then returns ALL buffer-local-variables as a Lisp form. WARNING: Very context-expensive (10k+ tokens). The new tools support filtering and discovery patterns."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to any file in the project. Project root will be determined automatically.")))

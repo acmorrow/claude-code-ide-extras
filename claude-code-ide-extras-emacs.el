@@ -95,6 +95,14 @@
   "claude-code-ide-extras-emacs/read_dir_locals"
   "MCP tool name for read_dir_locals.")
 
+(defconst claude-code-ide-extras-emacs-get-buffer-local-keys-tool-name
+  "claude-code-ide-extras-emacs/get_buffer_local_keys"
+  "MCP tool name for get_buffer_local_keys.")
+
+(defconst claude-code-ide-extras-emacs-get-buffer-local-variables-tool-name
+  "claude-code-ide-extras-emacs/get_buffer_local_variables"
+  "MCP tool name for get_buffer_local_variables.")
+
 (defconst claude-code-ide-extras-emacs-eval-elisp-tool-name
   "claude-code-ide-extras-emacs/eval_elisp"
   "MCP tool name for eval_elisp.")
@@ -190,7 +198,7 @@
      claude-code-ide-extras-emacs-buffer-search-tool-name)
 
 (defcustom claude-code-ide-extras-emacs-read-dir-locals-usage-prompt
-  "Read file-local configuration variables for a specific file."
+  "DEPRECATED: Use get_buffer_local_keys/get_buffer_local_variables instead. WARNING: This tool returns ALL buffer-local variables which can be very context-expensive (often 10k+ tokens). The new tools support filtering and discovery patterns."
   "Usage guidance for the read_dir_locals MCP tool."
   :type 'string
   :group 'claude-code-ide-extras-emacs)
@@ -198,6 +206,26 @@
 (put 'claude-code-ide-extras-emacs-read-dir-locals-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-emacs-read-dir-locals-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-get-buffer-local-keys-usage-prompt
+  "List buffer-local variable names for a file. Returns only names (lightweight discovery). Optional filter_regex (Emacs regex) to narrow results. IMPORTANT: Even unfiltered, this is much cheaper than getting full variables. Use this for discovery, then get_buffer_local_variables with filter for specific values."
+  "Usage guidance for the get_buffer_local_keys MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-get-buffer-local-keys-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-get-buffer-local-keys-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-get-buffer-local-variables-usage-prompt
+  "Get buffer-local variables with values for a file. Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables (e.g., \"^projectile-\" or \"^\\\\(projectile\\\\|lsp\\\\)-\"). Pattern: discover with get_buffer_local_keys first, then retrieve filtered values."
+  "Usage guidance for the get_buffer_local_variables MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-get-buffer-local-variables-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-get-buffer-local-variables-tool-name)
 
 (defcustom claude-code-ide-extras-emacs-eval-elisp-usage-prompt
   "Execute arbitrary elisp code and return the result. Powerful tool for exploring Emacs state and testing code."
@@ -363,19 +391,35 @@ Optional CONTEXT-LINES specifies lines of context before/after each match."
     (claude-code-ide-mcp-server-with-session-context nil
       (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
 
-  (defun claude-code-ide-extras-emacs--read-dir-locals (file-path)
-    "Read effective dir-local variables for FILE-PATH.
-Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
+  ;; Buffer-local variable tools
+  (defun claude-code-ide-extras-emacs--get-buffer-local-keys (file-path &optional filter-regex)
+    "Get buffer-local variable names for FILE-PATH.
+Opens FILE-PATH and returns list of buffer-local variable names.
+Optional FILTER-REGEX (Emacs regex) filters the returned names."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
-          (let ((buffer (find-file-noselect file-path)))
-            (unwind-protect
-                (with-current-buffer buffer
-                  (format "%S" (buffer-local-variables)))
-              (kill-buffer buffer)))
-        (error (format "Error reading dir-locals for %s: %s"
+          (claude-code-ide-extras-common--get-buffer-local-keys file-path filter-regex)
+        (error (format "Error reading buffer-local keys for %s: %s"
                       file-path
                       (error-message-string err))))))
+
+  (defun claude-code-ide-extras-emacs--get-buffer-local-variables (file-path &optional filter-regex)
+    "Get buffer-local variables with values for FILE-PATH.
+Opens FILE-PATH and returns buffer-local-variables as a Lisp form.
+Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (claude-code-ide-extras-common--get-buffer-local-variables file-path filter-regex)
+        (error (format "Error reading buffer-local variables for %s: %s"
+                      file-path
+                      (error-message-string err))))))
+
+  (defun claude-code-ide-extras-emacs--read-dir-locals (file-path)
+    "Read effective dir-local variables for FILE-PATH.
+DEPRECATED: Delegates to get-buffer-local-variables for compatibility.
+Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
+    ;; Simply delegate to the new function without filtering
+    (claude-code-ide-extras-emacs--get-buffer-local-variables file-path nil))
 
   ;; Eval tools
   (defun claude-code-ide-extras-emacs--eval-elisp (code)
@@ -802,9 +846,33 @@ If no references found, returns a message indicating that."
             :optional t)))
 
   (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--get-buffer-local-keys
+   :name claude-code-ide-extras-emacs-get-buffer-local-keys-tool-name
+   :description "Get buffer-local variable names for a file. Returns only names (lightweight discovery). Optional filter_regex (Emacs regex) to narrow results. Much cheaper than getting full variables. Use for discovery, then get_buffer_local_variables with filter for specific values."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to a file to read buffer-local variable names for.")
+           (:name "filter_regex"
+            :type string
+            :description "Optional Emacs regular expression to filter variable names (e.g., \"^projectile-\" or \"^\\\\(projectile\\\\|lsp\\\\)-\")."
+            :optional t)))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--get-buffer-local-variables
+   :name claude-code-ide-extras-emacs-get-buffer-local-variables-tool-name
+   :description "Get buffer-local variables with values for a file. Returns buffer-local-variables as a Lisp form. Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to a file to read buffer-local variables for.")
+           (:name "filter_regex"
+            :type string
+            :description "Optional Emacs regular expression to filter variables by name (e.g., \"^projectile-\" or \"^\\\\(projectile\\\\|lsp\\\\)-\")."
+            :optional t)))
+
+  (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-emacs--read-dir-locals
    :name claude-code-ide-extras-emacs-read-dir-locals-tool-name
-   :description "Read buffer-local variables for a specific file path. Opens the file and returns buffer-local-variables as a Lisp form."
+   :description "DEPRECATED: Use get_buffer_local_keys/get_buffer_local_variables instead. Read buffer-local variables for a specific file path. Opens the file and returns ALL buffer-local-variables as a Lisp form. WARNING: Very context-expensive (10k+ tokens). The new tools support filtering and discovery patterns."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to a file or directory to read buffer-local variables for.")))

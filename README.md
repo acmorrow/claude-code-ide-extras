@@ -83,6 +83,7 @@ Project-aware development tools via Projectile integration:
 - Asynchronous build and test execution
 - Compilation output query and search
 - Shell command execution in project context
+- Efficient buffer-local variable discovery and retrieval with filtering
 - Project configuration discovery via dir-locals
 
 **claude-code-ide-extras-lsp**
@@ -97,6 +98,7 @@ Emacs introspection and buffer access:
 - Command and symbol discovery
 - Documentation search across all loaded packages
 - Direct buffer read and search capabilities
+- Efficient buffer-local variable discovery and retrieval with filtering
 
 **claude-code-ide-extras-meta**
 Meta-level tools about the MCP tools themselves:
@@ -165,7 +167,7 @@ Install only the packages you need:
 
 ## Available Tools
 
-### Projectile (8 tools)
+### Projectile (10 tools)
 
 **task_start** - Launch project tasks (compile, test, configure, install, package, run)
 Returns immediately with buffer name while task runs asynchronously.
@@ -181,8 +183,14 @@ Returns matching lines with optional context.
 
 **task_kill** - Terminate running compilation
 
-**read_dir_locals** / **read_project_dir_locals** - Query Emacs directory-local variables
-Discovers project-specific build commands and configuration.
+**get_project_buffer_local_keys** - List buffer-local variable names for project root
+Lightweight discovery returning only variable names. Optional Emacs regex filtering. Much cheaper than getting full variables.
+
+**get_project_buffer_local_variables** - Get buffer-local variables with values for project root
+Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
+
+**read_project_dir_locals** - DEPRECATED: Query project-level directory-local variables
+Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Returns ALL variables (very expensive).
 
 **get_project_files** - Enumerate all files in project
 Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore.
@@ -194,7 +202,7 @@ Returns list of relative paths. Uses projectile cache for speed, respects ignore
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Emacs (15 tools)
+### Emacs (17 tools)
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -211,8 +219,14 @@ Line-range queries with 1-based indexing and negative offset support. Enables sc
 **buffer_search** - Search any Emacs buffer with regex
 Search compilation, scratch, messages, or any other buffer with optional context lines.
 
-**read_dir_locals** - Read buffer-local variables for a file
-Opens file and returns buffer-local-variables as a Lisp form.
+**get_buffer_local_keys** - List buffer-local variable names for a file
+Lightweight discovery returning only variable names. Optional Emacs regex filtering. Much cheaper than getting full variables.
+
+**get_buffer_local_variables** - Get buffer-local variables with values for a file
+Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
+
+**read_dir_locals** - DEPRECATED: Read buffer-local variables for a file
+Use get_buffer_local_keys/get_buffer_local_variables instead. Returns ALL variables (very expensive).
 
 **eval_elisp** - Execute arbitrary elisp code
 Powerful tool for exploring Emacs state, testing code, and iteratively redefining functions.
