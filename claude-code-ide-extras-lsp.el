@@ -92,29 +92,40 @@ FILE-PATH must be an absolute path to the file to format."
         (if (not target-buffer)
             (format "Error: Could not open file: %s" file-path)
           (with-current-buffer target-buffer
-            (if (not (bound-and-true-p lsp-mode))
-                (format "Error: LSP mode not active in buffer for file: %s" file-path)
-              (condition-case err
-                  (progn
-                    ;; Format the buffer in place using LSP server
-                    (lsp-format-buffer)
+            ;; The Edit tool writes directly to disk, potentially leaving the Emacs
+            ;; buffer stale. Handle the four cases:
+            ;;   clean  + in-sync: proceed normally
+            ;;   clean  + stale:   revert from disk, then proceed
+            ;;   dirty  + in-sync: proceed normally (format buffer content, save works)
+            ;;   dirty  + stale:   genuine conflict, error out
+            (let ((stale (not (verify-visited-file-modtime (current-buffer)))))
+              (if (and (buffer-modified-p) stale)
+                  (format "Error: buffer has unsaved modifications and file changed on disk: %s" file-path)
+                (when stale
+                  (revert-buffer t t t))   ; ignore-auto, noconfirm, preserve-modes
+                (if (not (bound-and-true-p lsp-mode))
+                    (format "Error: LSP mode not active in buffer for file: %s" file-path)
+                  (condition-case err
+                      (progn
+                        ;; Format the buffer in place using LSP server
+                        (lsp-format-buffer)
 
-                    ;; Save automatically after formatting. Claude's intent is to format
-                    ;; the FILE (persistent), not just the buffer (temporary), so auto-save
-                    ;; makes this explicit. Leaving the buffer modified creates confusing
-                    ;; state for the user - they see a modified indicator but didn't make
-                    ;; the edit. Some LSP operations (diagnostics, indexing) may also depend
-                    ;; on the file-on-disk being up to date with buffer contents. If
-                    ;; formatting fails, the error propagates and the file remains unchanged
-                    ;; (no partial save). Not saving and letting Claude call a separate save
-                    ;; tool was considered but rejected because it adds complexity for no
-                    ;; benefit since the 99% case is "format then save immediately".
-                    (save-buffer)
+                        ;; Save automatically after formatting. Claude's intent is to format
+                        ;; the FILE (persistent), not just the buffer (temporary), so auto-save
+                        ;; makes this explicit. Leaving the buffer modified creates confusing
+                        ;; state for the user - they see a modified indicator but didn't make
+                        ;; the edit. Some LSP operations (diagnostics, indexing) may also depend
+                        ;; on the file-on-disk being up to date with buffer contents. If
+                        ;; formatting fails, the error propagates and the file remains unchanged
+                        ;; (no partial save). Not saving and letting Claude call a separate save
+                        ;; tool was considered but rejected because it adds complexity for no
+                        ;; benefit since the 99% case is "format then save immediately".
+                        (save-buffer)
 
-                    (format "Successfully formatted and saved: %s" (buffer-file-name)))
-                (error (format "Error formatting %s: %s"
-                              file-path
-                              (error-message-string err))))))))))
+                        (format "Successfully formatted and saved: %s" (buffer-file-name)))
+                    (error (format "Error formatting %s: %s"
+                                  file-path
+                                  (error-message-string err))))))))))))
 
   ;; lsp-describe-thing-at-point wrapper (returns hover info as string)
   (defun claude-code-ide-extras-lsp--describe-thing-at-point (file-path line column)
