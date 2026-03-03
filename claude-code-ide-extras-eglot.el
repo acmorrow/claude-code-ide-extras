@@ -31,6 +31,9 @@
 ;; - Search symbols across the workspace
 ;; - Get structured file outlines (document symbols)
 ;; - Perform semantic renames across the project
+;; - Navigate call hierarchy (incoming callers / outgoing callees)
+;; - Find implementations of interfaces and abstract methods
+;; - Jump to type definitions
 ;;
 ;; This is the built-in alternative to claude-code-ide-extras-lsp (which
 ;; requires lsp-mode).  Eglot is included with Emacs 29+.
@@ -54,7 +57,7 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-eglot-")
 
-(defconst claude-code-ide-extras-eglot-version "0.0.3"
+(defconst claude-code-ide-extras-eglot-version "0.0.4"
   "Version of claude-code-ide-extras-eglot.")
 
 ;;; MCP Tool Names
@@ -82,6 +85,18 @@
 (defconst claude-code-ide-extras-eglot-rename-tool-name
   "claude-code-ide-extras-eglot/rename"
   "MCP tool name for rename.")
+
+(defconst claude-code-ide-extras-eglot-call-hierarchy-tool-name
+  "claude-code-ide-extras-eglot/call_hierarchy"
+  "MCP tool name for call_hierarchy.")
+
+(defconst claude-code-ide-extras-eglot-find-implementations-tool-name
+  "claude-code-ide-extras-eglot/find_implementations"
+  "MCP tool name for find_implementations.")
+
+(defconst claude-code-ide-extras-eglot-type-definition-tool-name
+  "claude-code-ide-extras-eglot/type_definition"
+  "MCP tool name for type_definition.")
 
 ;;; Customization
 
@@ -144,6 +159,36 @@
 (put 'claude-code-ide-extras-eglot-rename-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-eglot-rename-tool-name)
+
+(defcustom claude-code-ide-extras-eglot-call-hierarchy-usage-prompt
+  "Show incoming callers or outgoing callees for a function using Eglot LSP. Use direction \"incoming\" for callers or \"outgoing\" for callees."
+  "Usage guidance for the call_hierarchy MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-eglot)
+
+(put 'claude-code-ide-extras-eglot-call-hierarchy-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-eglot-call-hierarchy-tool-name)
+
+(defcustom claude-code-ide-extras-eglot-find-implementations-usage-prompt
+  "Find implementations of an interface, abstract method, or class using Eglot LSP. Returns file locations of all implementations."
+  "Usage guidance for the find_implementations MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-eglot)
+
+(put 'claude-code-ide-extras-eglot-find-implementations-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-eglot-find-implementations-tool-name)
+
+(defcustom claude-code-ide-extras-eglot-type-definition-usage-prompt
+  "Jump to the type definition of a symbol using Eglot LSP. Returns the file location where the type is defined."
+  "Usage guidance for the type_definition MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-eglot)
+
+(put 'claude-code-ide-extras-eglot-type-definition-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-eglot-type-definition-tool-name)
 
 ;;; Internal helpers
 
@@ -215,6 +260,64 @@ DEPTH controls indentation level (default 0)."
                       children (1+ depth)))
            entry)))
      (append symbols nil)
+     "\n")))
+
+(defun claude-code-ide-extras-eglot--format-location-or-link (item)
+  "Format an LSP Location or LocationLink plist ITEM as \"file:line\".
+Handles both Location (with :uri/:range) and LocationLink
+\(with :targetUri/:targetSelectionRange)."
+  (let* ((uri (or (plist-get item :uri)
+                  (plist-get item :targetUri)))
+         (range (or (plist-get item :range)
+                    (plist-get item :targetSelectionRange)))
+         (file (eglot-uri-to-path uri))
+         (line (if range
+                   (1+ (plist-get (plist-get range :start) :line))
+                 1)))
+    (format "%s:%d" file line)))
+
+(defun claude-code-ide-extras-eglot--format-locations-response (response)
+  "Format an LSP locations RESPONSE as a newline-separated string.
+RESPONSE may be nil, a single Location/LocationLink plist, or a vector."
+  (cond
+   ((null response) nil)
+   ((vectorp response)
+    (if (zerop (length response))
+        nil
+      (mapconcat #'claude-code-ide-extras-eglot--format-location-or-link
+                 (append response nil) "\n")))
+   ((plist-get response :uri)
+    (claude-code-ide-extras-eglot--format-location-or-link response))
+   ((plist-get response :targetUri)
+    (claude-code-ide-extras-eglot--format-location-or-link response))
+   (t nil)))
+
+(defun claude-code-ide-extras-eglot--format-call-hierarchy-item (item)
+  "Format a CallHierarchyItem plist ITEM as \"[Kind] name  file:line  (detail)\"."
+  (let* ((name (plist-get item :name))
+         (kind (plist-get item :kind))
+         (uri (plist-get item :uri))
+         (range (plist-get item :selectionRange))
+         (detail (plist-get item :detail))
+         (kind-name (claude-code-ide-extras-eglot--symbol-kind-name kind))
+         (file (eglot-uri-to-path uri))
+         (line (if range
+                   (1+ (plist-get (plist-get range :start) :line))
+                 1)))
+    (if (and detail (not (string-empty-p detail)))
+        (format "[%s] %s  %s:%d  (%s)" kind-name name file line detail)
+      (format "[%s] %s  %s:%d" kind-name name file line))))
+
+(defun claude-code-ide-extras-eglot--format-call-hierarchy-calls (calls direction)
+  "Format a vector of call hierarchy CALLS as a readable string.
+DIRECTION is \"incoming\" or \"outgoing\", determining whether to
+extract the :from or :to field from each call."
+  (let ((key (if (string= direction "incoming") :from :to)))
+    (mapconcat
+     (lambda (call)
+       (claude-code-ide-extras-eglot--format-call-hierarchy-item
+        (plist-get call key)))
+     (append calls nil)
      "\n")))
 
 ;;; Tool implementations
@@ -403,6 +506,88 @@ LINE is 1-based, COLUMN is 0-based."
           (error (format "Error renaming at %s:%d:%d: %s"
                          file-path line column (error-message-string err))))))))
 
+(defun claude-code-ide-extras-eglot--call-hierarchy (file-path line column direction)
+  "Get call hierarchy at FILE-PATH:LINE:COLUMN in DIRECTION.
+DIRECTION is \"incoming\" (callers) or \"outgoing\" (callees).
+LINE is 1-based, COLUMN is 0-based."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-eglot--prepare-buffer-for-file file-path)))
+      (with-current-buffer target-buffer
+        (condition-case err
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column column)
+              (let ((server (eglot-current-server)))
+                (if (not server)
+                    (format "Error: No Eglot server active for file: %s" file-path)
+                  (let ((items (eglot--request
+                                server :textDocument/prepareCallHierarchy
+                                (eglot--TextDocumentPositionParams))))
+                    (if (or (null items) (zerop (length items)))
+                        (format "No call hierarchy item found at %s:%d:%d" file-path line column)
+                      (let* ((item (elt items 0))
+                             (method (if (string= direction "incoming")
+                                         :callHierarchy/incomingCalls
+                                       :callHierarchy/outgoingCalls))
+                             (calls (eglot--request server method
+                                                    `(:item ,item))))
+                        (if (or (null calls) (zerop (length calls)))
+                            (format "No %s calls found for symbol at %s:%d:%d"
+                                    direction file-path line column)
+                          (claude-code-ide-extras-eglot--format-call-hierarchy-calls
+                           calls direction))))))))
+          (error (format "Error getting call hierarchy at %s:%d:%d: %s"
+                         file-path line column (error-message-string err))))))))
+
+(defun claude-code-ide-extras-eglot--find-implementations (file-path line column)
+  "Find implementations of symbol at FILE-PATH:LINE:COLUMN.
+LINE is 1-based, COLUMN is 0-based."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-eglot--prepare-buffer-for-file file-path)))
+      (with-current-buffer target-buffer
+        (condition-case err
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column column)
+              (let ((server (eglot-current-server)))
+                (if (not server)
+                    (format "Error: No Eglot server active for file: %s" file-path)
+                  (let* ((response (eglot--request
+                                    server :textDocument/implementation
+                                    (eglot--TextDocumentPositionParams)))
+                         (formatted (claude-code-ide-extras-eglot--format-locations-response response)))
+                    (or formatted
+                        (format "No implementations found for symbol at %s:%d:%d"
+                                file-path line column))))))
+          (error (format "Error finding implementations at %s:%d:%d: %s"
+                         file-path line column (error-message-string err))))))))
+
+(defun claude-code-ide-extras-eglot--type-definition (file-path line column)
+  "Get type definition of symbol at FILE-PATH:LINE:COLUMN.
+LINE is 1-based, COLUMN is 0-based."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-eglot--prepare-buffer-for-file file-path)))
+      (with-current-buffer target-buffer
+        (condition-case err
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column column)
+              (let ((server (eglot-current-server)))
+                (if (not server)
+                    (format "Error: No Eglot server active for file: %s" file-path)
+                  (let* ((response (eglot--request
+                                    server :textDocument/typeDefinition
+                                    (eglot--TextDocumentPositionParams)))
+                         (formatted (claude-code-ide-extras-eglot--format-locations-response response)))
+                    (or formatted
+                        (format "No type definition found for symbol at %s:%d:%d"
+                                file-path line column))))))
+          (error (format "Error getting type definition at %s:%d:%d: %s"
+                         file-path line column (error-message-string err))))))))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -489,6 +674,51 @@ LINE is 1-based, COLUMN is 0-based."
            (:name "new_name"
             :type string
             :description "The new name for the symbol.")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-eglot--call-hierarchy
+   :name claude-code-ide-extras-eglot-call-hierarchy-tool-name
+   :description "Get incoming callers or outgoing callees for a function using Eglot LSP. Uses the two-step call hierarchy protocol."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file containing the function.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")
+           (:name "direction"
+            :type string
+            :description "\"incoming\" for callers or \"outgoing\" for callees.")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-eglot--find-implementations
+   :name claude-code-ide-extras-eglot-find-implementations-tool-name
+   :description "Find implementations of an interface, abstract method, or class using Eglot LSP. Returns file:line locations."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-eglot--type-definition
+   :name claude-code-ide-extras-eglot-type-definition-tool-name
+   :description "Jump to the type definition of a symbol using Eglot LSP. Returns the file:line location where the type is defined."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")))
 
   (message "Claude Code IDE Extras: Eglot tools registered"))
 

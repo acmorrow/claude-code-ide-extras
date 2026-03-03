@@ -27,7 +27,9 @@
 ;;
 ;; - Format buffers using LSP
 ;; - Get hover information (type signatures, documentation)
-;; - Interact with LSP language servers
+;; - Navigate call hierarchy (incoming callers / outgoing callees)
+;; - Find implementations of interfaces and abstract methods
+;; - Jump to type definitions
 ;;
 ;; Part of the claude-code-ide-extras suite.
 ;;
@@ -48,7 +50,7 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-lsp-")
 
-(defconst claude-code-ide-extras-lsp-version "0.0.3"
+(defconst claude-code-ide-extras-lsp-version "0.0.4"
   "Version of claude-code-ide-extras-lsp.")
 
 ;;; MCP Tool Names
@@ -60,6 +62,18 @@
 (defconst claude-code-ide-extras-lsp-describe-thing-at-point-tool-name
   "claude-code-ide-extras-lsp/describe_thing_at_point"
   "MCP tool name for describe_thing_at_point.")
+
+(defconst claude-code-ide-extras-lsp-call-hierarchy-tool-name
+  "claude-code-ide-extras-lsp/call_hierarchy"
+  "MCP tool name for call_hierarchy.")
+
+(defconst claude-code-ide-extras-lsp-find-implementations-tool-name
+  "claude-code-ide-extras-lsp/find_implementations"
+  "MCP tool name for find_implementations.")
+
+(defconst claude-code-ide-extras-lsp-type-definition-tool-name
+  "claude-code-ide-extras-lsp/type_definition"
+  "MCP tool name for type_definition.")
 
 ;;; Customization
 
@@ -83,6 +97,36 @@
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-lsp-describe-thing-at-point-tool-name)
 
+(defcustom claude-code-ide-extras-lsp-call-hierarchy-usage-prompt
+  "Show incoming callers or outgoing callees for a function using LSP. Use direction \"incoming\" for callers or \"outgoing\" for callees."
+  "Usage guidance for the call_hierarchy MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-lsp)
+
+(put 'claude-code-ide-extras-lsp-call-hierarchy-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-lsp-call-hierarchy-tool-name)
+
+(defcustom claude-code-ide-extras-lsp-find-implementations-usage-prompt
+  "Find implementations of an interface, abstract method, or class using LSP. Returns file locations of all implementations."
+  "Usage guidance for the find_implementations MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-lsp)
+
+(put 'claude-code-ide-extras-lsp-find-implementations-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-lsp-find-implementations-tool-name)
+
+(defcustom claude-code-ide-extras-lsp-type-definition-usage-prompt
+  "Jump to the type definition of a symbol using LSP. Returns the file location where the type is defined."
+  "Usage guidance for the type_definition MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-lsp)
+
+(put 'claude-code-ide-extras-lsp-type-definition-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-lsp-type-definition-tool-name)
+
 ;;; Internal helpers
 
 (defun claude-code-ide-extras-lsp--prepare-buffer-for-file (file-path)
@@ -99,6 +143,77 @@ Returns the buffer, which may be newly created or pre-existing."
       (when (bound-and-true-p lsp--buffer-deferred)
         (lsp)))
     buffer))
+
+(defun claude-code-ide-extras-lsp--format-lsp-location (location)
+  "Format an LSP Location or LocationLink hash-table LOCATION as \"file:line\".
+Handles both Location (with \"uri\"/\"range\") and LocationLink
+\(with \"targetUri\"/\"targetSelectionRange\")."
+  (let* ((uri (or (gethash "uri" location)
+                  (gethash "targetUri" location)))
+         (range (or (gethash "range" location)
+                    (gethash "targetSelectionRange" location)))
+         (file (lsp--uri-to-path uri))
+         (line (if range
+                   (1+ (gethash "line" (gethash "start" range)))
+                 1)))
+    (format "%s:%d" file line)))
+
+(defun claude-code-ide-extras-lsp--format-locations-response (response)
+  "Format an LSP locations RESPONSE as a newline-separated string.
+RESPONSE may be nil, a single Location/LocationLink hash-table, or a vector."
+  (cond
+   ((null response) nil)
+   ((vectorp response)
+    (if (zerop (length response))
+        nil
+      (mapconcat #'claude-code-ide-extras-lsp--format-lsp-location
+                 (append response nil) "\n")))
+   ((hash-table-p response)
+    (claude-code-ide-extras-lsp--format-lsp-location response))
+   (t nil)))
+
+(defconst claude-code-ide-extras-lsp--symbol-kind-alist
+  '((1 . "File") (2 . "Module") (3 . "Namespace") (4 . "Package")
+    (5 . "Class") (6 . "Method") (7 . "Property") (8 . "Field")
+    (9 . "Constructor") (10 . "Enum") (11 . "Interface") (12 . "Function")
+    (13 . "Variable") (14 . "Constant") (15 . "String") (16 . "Number")
+    (17 . "Boolean") (18 . "Array") (19 . "Object") (20 . "Key")
+    (21 . "Null") (22 . "EnumMember") (23 . "Struct") (24 . "Event")
+    (25 . "Operator") (26 . "TypeParameter"))
+  "Alist mapping LSP SymbolKind integers to human-readable names.")
+
+(defun claude-code-ide-extras-lsp--symbol-kind-name (kind)
+  "Convert LSP SymbolKind integer KIND to a human-readable string."
+  (or (alist-get kind claude-code-ide-extras-lsp--symbol-kind-alist)
+      (format "Kind<%s>" kind)))
+
+(defun claude-code-ide-extras-lsp--format-call-hierarchy-item (item)
+  "Format a CallHierarchyItem hash-table ITEM as \"[Kind] name  file:line  (detail)\"."
+  (let* ((name (gethash "name" item))
+         (kind (gethash "kind" item))
+         (uri (gethash "uri" item))
+         (range (gethash "selectionRange" item))
+         (detail (gethash "detail" item))
+         (kind-name (claude-code-ide-extras-lsp--symbol-kind-name kind))
+         (file (lsp--uri-to-path uri))
+         (line (if range
+                   (1+ (gethash "line" (gethash "start" range)))
+                 1)))
+    (if (and detail (not (string-empty-p detail)))
+        (format "[%s] %s  %s:%d  (%s)" kind-name name file line detail)
+      (format "[%s] %s  %s:%d" kind-name name file line))))
+
+(defun claude-code-ide-extras-lsp--format-call-hierarchy-calls (calls direction)
+  "Format a vector of call hierarchy CALLS as a readable string.
+DIRECTION is \"incoming\" or \"outgoing\", determining whether to
+extract the \"from\" or \"to\" field from each call."
+  (let ((key (if (string= direction "incoming") "from" "to")))
+    (mapconcat
+     (lambda (call)
+       (claude-code-ide-extras-lsp--format-call-hierarchy-item
+        (gethash key call)))
+     (append calls nil)
+     "\n")))
 
 ;;; Tool implementations
 
@@ -186,6 +301,85 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
              (format "Error getting hover info at %s:%d:%d: %s"
                      file-path line column (error-message-string err)))))))))
 
+(defun claude-code-ide-extras-lsp--call-hierarchy (file-path line column direction)
+  "Get call hierarchy at FILE-PATH:LINE:COLUMN in DIRECTION.
+DIRECTION is \"incoming\" (callers) or \"outgoing\" (callees).
+LINE is 1-based, COLUMN is 0-based."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-lsp--prepare-buffer-for-file file-path)))
+      (with-current-buffer target-buffer
+        (condition-case err
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column column)
+              (if (not (bound-and-true-p lsp-mode))
+                  (format "Error: LSP mode not active for file: %s" file-path)
+                (let ((items (lsp-request
+                              "textDocument/prepareCallHierarchy"
+                              (lsp--text-document-position-params))))
+                  (if (or (null items) (zerop (length items)))
+                      (format "No call hierarchy item found at %s:%d:%d" file-path line column)
+                    (let* ((item (elt items 0))
+                           (method (if (string= direction "incoming")
+                                       "callHierarchy/incomingCalls"
+                                     "callHierarchy/outgoingCalls"))
+                           (calls (lsp-request method
+                                               (list :item item))))
+                      (if (or (null calls) (zerop (length calls)))
+                          (format "No %s calls found for symbol at %s:%d:%d"
+                                  direction file-path line column)
+                        (claude-code-ide-extras-lsp--format-call-hierarchy-calls
+                         calls direction)))))))
+          (error (format "Error getting call hierarchy at %s:%d:%d: %s"
+                         file-path line column (error-message-string err))))))))
+
+(defun claude-code-ide-extras-lsp--find-implementations (file-path line column)
+  "Find implementations of symbol at FILE-PATH:LINE:COLUMN.
+LINE is 1-based, COLUMN is 0-based."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-lsp--prepare-buffer-for-file file-path)))
+      (with-current-buffer target-buffer
+        (condition-case err
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column column)
+              (if (not (bound-and-true-p lsp-mode))
+                  (format "Error: LSP mode not active for file: %s" file-path)
+                (let* ((response (lsp-request
+                                  "textDocument/implementation"
+                                  (lsp--text-document-position-params)))
+                       (formatted (claude-code-ide-extras-lsp--format-locations-response response)))
+                  (or formatted
+                      (format "No implementations found for symbol at %s:%d:%d"
+                              file-path line column)))))
+          (error (format "Error finding implementations at %s:%d:%d: %s"
+                         file-path line column (error-message-string err))))))))
+
+(defun claude-code-ide-extras-lsp--type-definition (file-path line column)
+  "Get type definition of symbol at FILE-PATH:LINE:COLUMN.
+LINE is 1-based, COLUMN is 0-based."
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-lsp--prepare-buffer-for-file file-path)))
+      (with-current-buffer target-buffer
+        (condition-case err
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column column)
+              (if (not (bound-and-true-p lsp-mode))
+                  (format "Error: LSP mode not active for file: %s" file-path)
+                (let* ((response (lsp-request
+                                  "textDocument/typeDefinition"
+                                  (lsp--text-document-position-params)))
+                       (formatted (claude-code-ide-extras-lsp--format-locations-response response)))
+                  (or formatted
+                      (format "No type definition found for symbol at %s:%d:%d"
+                              file-path line column)))))
+          (error (format "Error getting type definition at %s:%d:%d: %s"
+                         file-path line column (error-message-string err))))))))
+
 ;;; Tool registration
 
 ;;;###autoload
@@ -205,6 +399,51 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
    :function #'claude-code-ide-extras-lsp--describe-thing-at-point
    :name claude-code-ide-extras-lsp-describe-thing-at-point-tool-name
    :description "Get LSP hover information (type signature and documentation) at a specific location. Returns formatted text with type, parameters, and docstring."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-lsp--call-hierarchy
+   :name claude-code-ide-extras-lsp-call-hierarchy-tool-name
+   :description "Get incoming callers or outgoing callees for a function using LSP. Uses the two-step call hierarchy protocol."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file containing the function.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")
+           (:name "direction"
+            :type string
+            :description "\"incoming\" for callers or \"outgoing\" for callees.")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-lsp--find-implementations
+   :name claude-code-ide-extras-lsp-find-implementations-tool-name
+   :description "Find implementations of an interface, abstract method, or class using LSP. Returns file:line locations."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to the file.")
+           (:name "line"
+            :type number
+            :description "Line number (1-based).")
+           (:name "column"
+            :type number
+            :description "Column number (0-based).")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-lsp--type-definition
+   :name claude-code-ide-extras-lsp-type-definition-tool-name
+   :description "Jump to the type definition of a symbol using LSP. Returns the file:line location where the type is defined."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to the file.")
