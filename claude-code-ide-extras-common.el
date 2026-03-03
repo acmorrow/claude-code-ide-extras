@@ -3,6 +3,7 @@
 ;; Copyright (C) 2025 Andrew Morrow
 
 ;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
+;;         Tim Ransom
 ;; Keywords: tools, ai, claude, mcp
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -248,23 +249,6 @@ Only kills the buffer if it was opened by this function (not already open)."
       ;; Only kill buffer if we opened it (not already open)
       (unless existing-buffer
         (kill-buffer buffer)))))
-
-;;; LSP initialization utilities
-
-(defun claude-code-ide-extras-common--prepare-buffer-for-file (file-path)
-  "Get or create buffer for FILE-PATH with LSP initialized if deferred.
-If the buffer has lsp-deferred configured but not yet activated (indicated by
-lsp--buffer-deferred breadcrumb), this forces immediate LSP initialization by
-calling (lsp). This enables MCP tools to access semantic information without
-requiring the buffer to be displayed.
-
-Returns the buffer, which may be newly created or pre-existing."
-  (let* ((existing (get-file-buffer file-path))
-         (buffer (or existing (find-file-noselect file-path))))
-    (with-current-buffer buffer
-      (when (bound-and-true-p lsp--buffer-deferred)
-        (lsp)))
-    buffer))
 
 (provide 'claude-code-ide-extras-common)
 ;;; claude-code-ide-extras-common.el ends here

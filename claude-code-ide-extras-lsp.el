@@ -3,6 +3,7 @@
 ;; Copyright (C) 2025 Andrew Morrow
 
 ;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
+;;         Tim Ransom
 ;; Keywords: tools, lsp, ai, claude, mcp
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -37,7 +38,7 @@
 
 ;;; Code:
 
-(require 'lsp-mode)
+(require 'lsp-mode nil t)
 (require 'claude-code-ide)
 (require 'claude-code-ide-extras-common)
 
@@ -82,92 +83,108 @@
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-lsp-describe-thing-at-point-tool-name)
 
+;;; Internal helpers
+
+(defun claude-code-ide-extras-lsp--prepare-buffer-for-file (file-path)
+  "Get or create buffer for FILE-PATH with LSP initialized if deferred.
+If the buffer has lsp-deferred configured but not yet activated (indicated by
+lsp--buffer-deferred breadcrumb), this forces immediate LSP initialization by
+calling (lsp).  This enables MCP tools to access semantic information without
+requiring the buffer to be displayed.
+
+Returns the buffer, which may be newly created or pre-existing."
+  (let* ((existing (get-file-buffer file-path))
+         (buffer (or existing (find-file-noselect file-path))))
+    (with-current-buffer buffer
+      (when (bound-and-true-p lsp--buffer-deferred)
+        (lsp)))
+    buffer))
+
 ;;; Tool implementations
 
-  (defun claude-code-ide-extras-lsp--format-buffer (file-path)
-    "Format the specified file using LSP formatting.
+(defun claude-code-ide-extras-lsp--format-buffer (file-path)
+  "Format the specified file using LSP formatting.
 FILE-PATH must be an absolute path to the file to format."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
-        (if (not target-buffer)
-            (format "Error: Could not open file: %s" file-path)
-          (with-current-buffer target-buffer
-            ;; The Edit tool writes directly to disk, potentially leaving the Emacs
-            ;; buffer stale. Handle the four cases:
-            ;;   clean  + in-sync: proceed normally
-            ;;   clean  + stale:   revert from disk, then proceed
-            ;;   dirty  + in-sync: proceed normally (format buffer content, save works)
-            ;;   dirty  + stale:   genuine conflict, error out
-            (let ((stale (not (verify-visited-file-modtime (current-buffer)))))
-              (if (and (buffer-modified-p) stale)
-                  (format "Error: buffer has unsaved modifications and file changed on disk: %s" file-path)
-                (when stale
-                  (revert-buffer t t t))   ; ignore-auto, noconfirm, preserve-modes
-                (if (not (bound-and-true-p lsp-mode))
-                    (format "Error: LSP mode not active in buffer for file: %s" file-path)
-                  (condition-case err
-                      (progn
-                        ;; Format the buffer in place using LSP server
-                        (lsp-format-buffer)
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((target-buffer (claude-code-ide-extras-lsp--prepare-buffer-for-file file-path)))
+      (if (not target-buffer)
+          (format "Error: Could not open file: %s" file-path)
+        (with-current-buffer target-buffer
+          ;; The Edit tool writes directly to disk, potentially leaving the Emacs
+          ;; buffer stale. Handle the four cases:
+          ;;   clean  + in-sync: proceed normally
+          ;;   clean  + stale:   revert from disk, then proceed
+          ;;   dirty  + in-sync: proceed normally (format buffer content, save works)
+          ;;   dirty  + stale:   genuine conflict, error out
+          (let ((stale (not (verify-visited-file-modtime (current-buffer)))))
+            (if (and (buffer-modified-p) stale)
+                (format "Error: buffer has unsaved modifications and file changed on disk: %s" file-path)
+              (when stale
+                (revert-buffer t t t))   ; ignore-auto, noconfirm, preserve-modes
+              (if (not (bound-and-true-p lsp-mode))
+                  (format "Error: LSP mode not active in buffer for file: %s" file-path)
+                (condition-case err
+                    (progn
+                      ;; Format the buffer in place using LSP server
+                      (lsp-format-buffer)
 
-                        ;; Save automatically after formatting. Claude's intent is to format
-                        ;; the FILE (persistent), not just the buffer (temporary), so auto-save
-                        ;; makes this explicit. Leaving the buffer modified creates confusing
-                        ;; state for the user - they see a modified indicator but didn't make
-                        ;; the edit. Some LSP operations (diagnostics, indexing) may also depend
-                        ;; on the file-on-disk being up to date with buffer contents. If
-                        ;; formatting fails, the error propagates and the file remains unchanged
-                        ;; (no partial save). Not saving and letting Claude call a separate save
-                        ;; tool was considered but rejected because it adds complexity for no
-                        ;; benefit since the 99% case is "format then save immediately".
-                        (save-buffer)
+                      ;; Save automatically after formatting. Claude's intent is to format
+                      ;; the FILE (persistent), not just the buffer (temporary), so auto-save
+                      ;; makes this explicit. Leaving the buffer modified creates confusing
+                      ;; state for the user - they see a modified indicator but didn't make
+                      ;; the edit. Some LSP operations (diagnostics, indexing) may also depend
+                      ;; on the file-on-disk being up to date with buffer contents. If
+                      ;; formatting fails, the error propagates and the file remains unchanged
+                      ;; (no partial save). Not saving and letting Claude call a separate save
+                      ;; tool was considered but rejected because it adds complexity for no
+                      ;; benefit since the 99% case is "format then save immediately".
+                      (save-buffer)
 
-                        (format "Successfully formatted and saved: %s" (buffer-file-name)))
-                    (error (format "Error formatting %s: %s"
-                                  file-path
-                                  (error-message-string err))))))))))))
+                      (format "Successfully formatted and saved: %s" (buffer-file-name)))
+                  (error (format "Error formatting %s: %s"
+                                file-path
+                                (error-message-string err))))))))))))
 
-  ;; lsp-describe-thing-at-point wrapper (returns hover info as string)
-  (defun claude-code-ide-extras-lsp--describe-thing-at-point (file-path line column)
-    "Get LSP hover information at FILE-PATH:LINE:COLUMN.
+(defun claude-code-ide-extras-lsp--describe-thing-at-point (file-path line column)
+  "Get LSP hover information at FILE-PATH:LINE:COLUMN.
 Returns formatted hover text including type signature and documentation.
 LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
-    (if (not file-path)
-        (error "file_path parameter is required")
-      (claude-code-ide-mcp-server-with-session-context nil
-        (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
-          (with-current-buffer target-buffer
-            (condition-case err
-                (save-excursion
-                  ;; Position at the specified location
-                  (goto-char (point-min))
-                  (forward-line (1- line))
-                  (move-to-column column)
+  (if (not file-path)
+      (error "file_path parameter is required")
+    (claude-code-ide-mcp-server-with-session-context nil
+      (let ((target-buffer (claude-code-ide-extras-lsp--prepare-buffer-for-file file-path)))
+        (with-current-buffer target-buffer
+          (condition-case err
+              (save-excursion
+                ;; Position at the specified location
+                (goto-char (point-min))
+                (forward-line (1- line))
+                (move-to-column column)
 
-                  ;; Query LSP server for hover information at current position. Uses
-                  ;; the LSP textDocument/hover protocol: construct the request with
-                  ;; file URI and line/column position, wrap it in LSP request format,
-                  ;; send it to the language server, wait for response, and extract the
-                  ;; content. The language server returns hover contents in either plain
-                  ;; text or markdown format, plus optional syntax-highlighted code blocks.
-                  (let ((contents (-some->> (lsp--text-document-position-params)
-                                    (lsp--make-request "textDocument/hover")
-                                    (lsp--send-request)
-                                    (lsp:hover-contents))))
-                    (if (and contents (not (equal contents "")))
-                        ;; Render hover content as plain text. lsp--render-on-hover-content
-                        ;; handles conversion from markdown/markup to readable text.
-                        ;; Split and trim to clean up formatting artifacts.
-                        (mapconcat 'string-trim-right
-                                   (split-string (lsp--render-on-hover-content contents t) "\n")
-                                   "\n")
-                      ;; No hover info: either position is not on a symbol, or
-                      ;; language server doesn't have information for this symbol.
-                      ;; This is normal for whitespace, comments, or undeclared symbols.
-                      (format "No hover information at %s:%d:%d" file-path line column))))
-              (error
-               (format "Error getting hover info at %s:%d:%d: %s"
-                       file-path line column (error-message-string err)))))))))
+                ;; Query LSP server for hover information at current position. Uses
+                ;; the LSP textDocument/hover protocol: construct the request with
+                ;; file URI and line/column position, wrap it in LSP request format,
+                ;; send it to the language server, wait for response, and extract the
+                ;; content. The language server returns hover contents in either plain
+                ;; text or markdown format, plus optional syntax-highlighted code blocks.
+                (let ((contents (-some->> (lsp--text-document-position-params)
+                                  (lsp--make-request "textDocument/hover")
+                                  (lsp--send-request)
+                                  (lsp:hover-contents))))
+                  (if (and contents (not (equal contents "")))
+                      ;; Render hover content as plain text. lsp--render-on-hover-content
+                      ;; handles conversion from markdown/markup to readable text.
+                      ;; Split and trim to clean up formatting artifacts.
+                      (mapconcat 'string-trim-right
+                                 (split-string (lsp--render-on-hover-content contents t) "\n")
+                                 "\n")
+                    ;; No hover info: either position is not on a symbol, or
+                    ;; language server doesn't have information for this symbol.
+                    ;; This is normal for whitespace, comments, or undeclared symbols.
+                    (format "No hover information at %s:%d:%d" file-path line column))))
+            (error
+             (format "Error getting hover info at %s:%d:%d: %s"
+                     file-path line column (error-message-string err)))))))))
 
 ;;; Tool registration
 

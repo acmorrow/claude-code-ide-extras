@@ -3,6 +3,7 @@
 ;; Copyright (C) 2025 Andrew Morrow
 
 ;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
+;;         Tim Ransom
 ;; Keywords: tools, projectile, ai, claude, mcp
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -38,7 +39,7 @@
 
 ;;; Code:
 
-(require 'projectile)
+(require 'projectile nil t)
 (require 'claude-code-ide)
 (require 'claude-code-ide-extras-common)
 (require 'seq)
@@ -172,16 +173,6 @@
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-projectile-task-kill-tool-name)
 
-(defcustom claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
-  "Read project-wide configuration. Check for build commands and project settings."
-  "Usage guidance for the read_project_dir_locals MCP tool."
-  :type 'string
-  :group 'claude-code-ide-extras-projectile)
-
-(put 'claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
-     'claude-code-ide-extras-mcp-tool-name
-     claude-code-ide-extras-projectile-read-project-dir-locals-tool-name)
-
 (defcustom claude-code-ide-extras-projectile-get-project-files-usage-prompt
   "Enumerate all files in the current project. Fast using projectile cache."
   "Usage guidance for the get_project_files MCP tool."
@@ -194,104 +185,99 @@
 
 ;;; Tool implementations
 
-  ;; Custom MCP tools for reading project dir-locals
-  (defun claude-code-ide-extras-projectile--get-project-buffer-local-keys (file-path &optional filter-regex)
-    "Get buffer-local variable names for the project containing FILE-PATH.
+(defun claude-code-ide-extras-projectile--get-project-buffer-local-keys (file-path &optional filter-regex)
+  "Get buffer-local variable names for the project containing FILE-PATH.
 Finds the project root and returns list of buffer-local variable names.
 Optional FILTER-REGEX (Emacs regex) filters the returned names."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (condition-case err
-          (let* ((default-directory (file-name-directory file-path))
-                 (project-root (or (projectile-project-root)
-                                   (when-let ((proj (project-current)))
-                                     (project-root proj)))))
-            ;; Validate project root exists
-            (unless project-root
-              (error "No project root found for file: %s" file-path))
-            ;; Validate file is under project root
-            (unless (file-in-directory-p file-path project-root)
-              (error "File %s is not under project root %s" file-path project-root))
-            ;; Use a probe file in project root to trigger dir-locals loading
-            (let ((probe-file (expand-file-name ".dir-locals-probe" project-root)))
-              ;; Delegate to the common implementation which handles buffer management
-              (claude-code-ide-extras-common--get-buffer-local-keys probe-file filter-regex)))
-        (error (format "Error reading project buffer-local keys: %s" (error-message-string err))))))
+  (claude-code-ide-mcp-server-with-session-context nil
+    (condition-case err
+        (let* ((default-directory (file-name-directory file-path))
+               (project-root (or (projectile-project-root)
+                                 (when-let ((proj (project-current)))
+                                   (project-root proj)))))
+          ;; Validate project root exists
+          (unless project-root
+            (error "No project root found for file: %s" file-path))
+          ;; Validate file is under project root
+          (unless (file-in-directory-p file-path project-root)
+            (error "File %s is not under project root %s" file-path project-root))
+          ;; Use a probe file in project root to trigger dir-locals loading
+          (let ((probe-file (expand-file-name ".dir-locals-probe" project-root)))
+            ;; Delegate to the common implementation which handles buffer management
+            (claude-code-ide-extras-common--get-buffer-local-keys probe-file filter-regex)))
+      (error (format "Error reading project buffer-local keys: %s" (error-message-string err))))))
 
-  (defun claude-code-ide-extras-projectile--get-project-buffer-local-variables (file-path &optional filter-regex)
-    "Get buffer-local variables with values for the project containing FILE-PATH.
+(defun claude-code-ide-extras-projectile--get-project-buffer-local-variables (file-path &optional filter-regex)
+  "Get buffer-local variables with values for the project containing FILE-PATH.
 Finds the project root and returns buffer-local-variables as a Lisp form.
 Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (condition-case err
-          (let* ((default-directory (file-name-directory file-path))
-                 (project-root (or (projectile-project-root)
-                                   (when-let ((proj (project-current)))
-                                     (project-root proj)))))
-            ;; Validate project root exists
-            (unless project-root
-              (error "No project root found for file: %s" file-path))
-            ;; Validate file is under project root
-            (unless (file-in-directory-p file-path project-root)
-              (error "File %s is not under project root %s" file-path project-root))
-            ;; Use a probe file in project root to trigger dir-locals loading
-            (let ((probe-file (expand-file-name ".dir-locals-probe" project-root)))
-              ;; Delegate to the common implementation which handles buffer management
-              (claude-code-ide-extras-common--get-buffer-local-variables probe-file filter-regex)))
-        (error (format "Error reading project buffer-local variables: %s" (error-message-string err))))))
+  (claude-code-ide-mcp-server-with-session-context nil
+    (condition-case err
+        (let* ((default-directory (file-name-directory file-path))
+               (project-root (or (projectile-project-root)
+                                 (when-let ((proj (project-current)))
+                                   (project-root proj)))))
+          ;; Validate project root exists
+          (unless project-root
+            (error "No project root found for file: %s" file-path))
+          ;; Validate file is under project root
+          (unless (file-in-directory-p file-path project-root)
+            (error "File %s is not under project root %s" file-path project-root))
+          ;; Use a probe file in project root to trigger dir-locals loading
+          (let ((probe-file (expand-file-name ".dir-locals-probe" project-root)))
+            ;; Delegate to the common implementation which handles buffer management
+            (claude-code-ide-extras-common--get-buffer-local-variables probe-file filter-regex)))
+      (error (format "Error reading project buffer-local variables: %s" (error-message-string err))))))
 
-  (defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
-    "Read effective dir-local variables for the project containing FILE-PATH.
+(defun claude-code-ide-extras-projectile--read-project-dir-locals (file-path)
+  "Read effective dir-local variables for the project containing FILE-PATH.
 DEPRECATED: Delegates to get-project-buffer-local-variables for compatibility."
-    ;; Simply delegate to the new function without filtering
-    (claude-code-ide-extras-projectile--get-project-buffer-local-variables file-path nil))
+  ;; Simply delegate to the new function without filtering
+  (claude-code-ide-extras-projectile--get-project-buffer-local-variables file-path nil))
 
-  ;; Custom MCP tools for projectile task management (split architecture)
-
-  ;; Tool 1: Start a projectile task (non-blocking)
-  (defun claude-code-ide-extras-projectile--task-start (task-type command file-path)
-    "Start a projectile task (compile, test, configure, install, package, run).
+(defun claude-code-ide-extras-projectile--task-start (task-type command file-path)
+  "Start a projectile task (compile, test, configure, install, package, run).
 Returns the compilation buffer name for later querying.
 
 TASK-TYPE is one of: compile, test, configure, install, package, run.
 COMMAND is the shell command to execute (required).
 FILE-PATH is used to determine which project to operate on."
-    (claude-code-ide-mcp-server-with-session-context nil
-      ;; Validate projectile-per-project-compilation-buffer is set
-      (if (not projectile-per-project-compilation-buffer)
-          "Error: projectile-per-project-compilation-buffer must be t for safe parallel compilation. Add (setq projectile-per-project-compilation-buffer t) to your Emacs config."
-        ;; Determine project from file-path
-        (let* ((default-directory (file-name-directory file-path))
-               (project-root (projectile-project-root)))
-          (if (not project-root)
-              (format "Error: %s is not in a projectile project" file-path)
-            ;; Determine the task function and command map
-            (let* ((task-info (pcase task-type
-                               ("compile" (cons #'projectile-compile-project projectile-compilation-cmd-map))
-                               ("test" (cons #'projectile-test-project projectile-test-cmd-map))
-                               ("configure" (cons #'projectile-configure-project projectile-configure-cmd-map))
-                               ("install" (cons #'projectile-install-project projectile-install-cmd-map))
-                               ("package" (cons #'projectile-package-project projectile-package-cmd-map))
-                               ("run" (cons #'projectile-run-project projectile-run-cmd-map))
-                               (_ nil)))
-                   (task-function (car task-info))
-                   (command-map (cdr task-info))
-                   (compilation-read-command nil) ;; Disable prompting
-                   (compilation-dir (projectile-compilation-dir)))
-              (if (not task-function)
-                  (format "Error: Unknown task-type '%s'. Must be one of: compile, test, configure, install, package, run" task-type)
-                ;; Cache the command in projectile's map
-                (when command
-                  (puthash compilation-dir command command-map))
-                ;; Compute the buffer name deterministically (respects per-project setting)
-                (let ((buffer-name (projectile-compilation-buffer-name "compilation")))
-                  ;; Call the projectile task function (non-blocking)
-                  (funcall task-function nil)
-                  ;; Return the buffer name for later querying
-                  (format "Started %s in buffer: %s" task-type buffer-name)))))))))
+  (claude-code-ide-mcp-server-with-session-context nil
+    ;; Validate projectile-per-project-compilation-buffer is set
+    (if (not projectile-per-project-compilation-buffer)
+        "Error: projectile-per-project-compilation-buffer must be t for safe parallel compilation. Add (setq projectile-per-project-compilation-buffer t) to your Emacs config."
+      ;; Determine project from file-path
+      (let* ((default-directory (file-name-directory file-path))
+             (project-root (projectile-project-root)))
+        (if (not project-root)
+            (format "Error: %s is not in a projectile project" file-path)
+          ;; Determine the task function and command map
+          (let* ((task-info (pcase task-type
+                             ("compile" (cons #'projectile-compile-project projectile-compilation-cmd-map))
+                             ("test" (cons #'projectile-test-project projectile-test-cmd-map))
+                             ("configure" (cons #'projectile-configure-project projectile-configure-cmd-map))
+                             ("install" (cons #'projectile-install-project projectile-install-cmd-map))
+                             ("package" (cons #'projectile-package-project projectile-package-cmd-map))
+                             ("run" (cons #'projectile-run-project projectile-run-cmd-map))
+                             (_ nil)))
+                 (task-function (car task-info))
+                 (command-map (cdr task-info))
+                 (compilation-read-command nil) ;; Disable prompting
+                 (compilation-dir (projectile-compilation-dir)))
+            (if (not task-function)
+                (format "Error: Unknown task-type '%s'. Must be one of: compile, test, configure, install, package, run" task-type)
+              ;; Cache the command in projectile's map
+              (when command
+                (puthash compilation-dir command command-map))
+              ;; Compute the buffer name deterministically (respects per-project setting)
+              (let ((buffer-name (projectile-compilation-buffer-name "compilation")))
+                ;; Call the projectile task function (non-blocking)
+                (funcall task-function nil)
+                ;; Return the buffer name for later querying
+                (format "Started %s in buffer: %s" task-type buffer-name)))))))))
 
-  ;; Tool 2: Wait for projectile task completion and get size info
-  (defun claude-code-ide-extras-projectile--task-wait (buffer-name)
-    "Check if compilation is finished and return size info when done.
+(defun claude-code-ide-extras-projectile--task-wait (buffer-name)
+  "Check if compilation is finished and return size info when done.
 
 BUFFER-NAME is the name of the compilation buffer to check.
 
@@ -299,23 +285,22 @@ Returns \\='running if still executing, or \\='finished with output size
 \(lines and chars) when complete. Use this to poll for completion and
 decide whether to use head/tail limiting when calling
 projectile_task_query."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (let ((buf (get-buffer buffer-name)))
-        (if (not buf)
-            (format "Error: Buffer not found: %s" buffer-name)
-          (with-current-buffer buf
-            (if (and (get-buffer-process buf)
-                     (process-live-p (get-buffer-process buf)))
-                (format "Status: running")
-              ;; Compilation finished - return size info
-              (let* ((line-count (count-lines (point-min) (point-max)))
-                     (char-count (- (point-max) (point-min))))
-                (format "Status: finished\n\nOutput size:\n  Lines: %d\n  Characters: %d"
-                        line-count char-count))))))))
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((buf (get-buffer buffer-name)))
+      (if (not buf)
+          (format "Error: Buffer not found: %s" buffer-name)
+        (with-current-buffer buf
+          (if (and (get-buffer-process buf)
+                   (process-live-p (get-buffer-process buf)))
+              (format "Status: running")
+            ;; Compilation finished - return size info
+            (let* ((line-count (count-lines (point-min) (point-max)))
+                   (char-count (- (point-max) (point-min))))
+              (format "Status: finished\n\nOutput size:\n  Lines: %d\n  Characters: %d"
+                      line-count char-count))))))))
 
-  ;; Tool 3: Query projectile task output (call after task-wait says finished)
-  (defun claude-code-ide-extras-projectile--task-query (buffer-name &optional start-line num-lines)
-    "Retrieve output from a finished compilation buffer.
+(defun claude-code-ide-extras-projectile--task-query (buffer-name &optional start-line num-lines)
+  "Retrieve output from a finished compilation buffer.
 
 BUFFER-NAME is the name of the compilation buffer to query.
 Optional START-LINE is the first line to retrieve (1-based, negative
@@ -329,38 +314,35 @@ This should only be called after projectile_task_wait indicates the
 task is finished.
 Returns the compilation output, optionally limited by the line
 range."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (claude-code-ide-extras-common--buffer-query buffer-name start-line num-lines)))
-  ;; Tool 4: Kill a running projectile task
-  (defun claude-code-ide-extras-projectile--task-kill (buffer-name)
-    "Kill a running compilation in the specified buffer.
+  (claude-code-ide-mcp-server-with-session-context nil
+    (claude-code-ide-extras-common--buffer-query buffer-name start-line num-lines)))
+
+(defun claude-code-ide-extras-projectile--task-kill (buffer-name)
+  "Kill a running compilation in the specified buffer.
 BUFFER-NAME is the name of the compilation buffer to kill.
 Returns a status message."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (let ((buf (get-buffer buffer-name)))
-        (if (not buf)
-            (format "Error: Buffer not found: %s" buffer-name)
-          (with-current-buffer buf
-            (if (not (and (get-buffer-process buf)
-                          (process-live-p (get-buffer-process buf))))
-                (format "No compilation running in buffer: %s" buffer-name)
-              ;; Use compilation-mode's built-in kill function
-              (kill-compilation)
-              (format "Killed compilation in buffer: %s" buffer-name)))))))
+  (claude-code-ide-mcp-server-with-session-context nil
+    (let ((buf (get-buffer buffer-name)))
+      (if (not buf)
+          (format "Error: Buffer not found: %s" buffer-name)
+        (with-current-buffer buf
+          (if (not (and (get-buffer-process buf)
+                        (process-live-p (get-buffer-process buf))))
+              (format "No compilation running in buffer: %s" buffer-name)
+            ;; Use compilation-mode's built-in kill function
+            (kill-compilation)
+            (format "Killed compilation in buffer: %s" buffer-name)))))))
 
-
-  ;; Tool 5: Search projectile task output
-  (defun claude-code-ide-extras-projectile--task-search (buffer-name pattern &optional context-lines)
-    "Search projectile task/compilation output for PATTERN.
+(defun claude-code-ide-extras-projectile--task-search (buffer-name pattern &optional context-lines)
+  "Search projectile task/compilation output for PATTERN.
 BUFFER-NAME is the compilation buffer name (from task_start).
 PATTERN is a regular expression to search for.
 CONTEXT-LINES specifies number of lines before/after each match (default 0)."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
+  (claude-code-ide-mcp-server-with-session-context nil
+    (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
 
-  ;; Project file enumeration
-  (defun claude-code-ide-extras-projectile--get-project-files ()
-    "Enumerate all files in the current project.
+(defun claude-code-ide-extras-projectile--get-project-files (file-path)
+  "Enumerate all files in the project containing FILE-PATH.
 
 Uses projectile's cached file list for speed. Returns files as a list of
 paths relative to the project root. This is much faster than using find
@@ -368,14 +350,15 @@ because projectile maintains an up-to-date cache of project files.
 
 The file list respects projectile's ignore rules (from .projectile,
 .gitignore, etc.), so generated files and dependencies are excluded."
-    (claude-code-ide-mcp-server-with-session-context nil
-      (condition-case err
-          (let ((project-root (projectile-project-root)))
-            (if (not project-root)
-                "Error: Not in a projectile project"
-              ;; projectile-current-project-files returns files relative to project root
-              (projectile-current-project-files)))
-        (error (format "Error getting project files: %s" (error-message-string err))))))
+  (claude-code-ide-mcp-server-with-session-context nil
+    (condition-case err
+        (let* ((default-directory (file-name-directory file-path))
+               (project-root (projectile-project-root)))
+          (if (not project-root)
+              (format "Error: %s is not in a projectile project" file-path)
+            ;; projectile-current-project-files returns files relative to project root
+            (projectile-current-project-files)))
+      (error (format "Error getting project files: %s" (error-message-string err))))))
 
 ;;; Tool registration
 
@@ -481,8 +464,10 @@ The file list respects projectile's ignore rules (from .projectile,
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--get-project-files
    :name claude-code-ide-extras-projectile-get-project-files-tool-name
-   :description "Enumerate all files in the current project. Returns a list of file paths relative to project root. Uses projectile's cached file list for speed, respecting ignore rules from .projectile and .gitignore."
-   :args nil)
+   :description "Enumerate all files in the project containing the given file. Returns a list of file paths relative to project root. Uses projectile's cached file list for speed, respecting ignore rules from .projectile and .gitignore."
+   :args '((:name "file_path"
+            :type string
+            :description "Absolute path to any file in the project. Project root will be determined automatically.")))
 
   (message "Claude Code IDE Extras: Projectile tools registered"))
 
