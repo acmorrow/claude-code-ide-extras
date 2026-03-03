@@ -52,10 +52,11 @@ one `CLAUDE.md` that exhorts Claude Code to run the meta MCP to learn
 of the others, or you can put that in a custom slash command. The
 default guidance is minimal and should almost certainly be customized.
 
-I have ideas for several other tools to give Claude Code deeper
-integration with Emacs, including the ability to directly create and
-edit buffers, additional LSP integrations, and potentially just
-directly eval elisp.
+Since the initial release, many of these ideas have been realized:
+eval_elisp provides direct elisp evaluation, and Eglot support brings
+additional LSP integrations (code actions, workspace symbols, rename,
+and more) for users who prefer built-in Emacs packages. A project.el
+backend was also added as an alternative to projectile.
 
 Finally, a note on security: there is none. As I started writing these
 tools, I kept writing down notes on how I should later come back and
@@ -73,24 +74,10 @@ The remainder of this `README.md` was written by Claude Code.
 
 ## Overview
 
-This repository provides four packages that extend claude-code-ide with additional MCP tools:
+This repository provides six packages that extend claude-code-ide with additional MCP tools:
 
 **claude-code-ide-extras** (meta-package)
-Convenience package that installs and configures all extension packages at once.
-
-**claude-code-ide-extras-projectile**
-Project-aware development tools via Projectile integration:
-- Asynchronous build and test execution
-- Compilation output query and search
-- Shell command execution in project context
-- Efficient buffer-local variable discovery and retrieval with filtering
-- Project configuration discovery via dir-locals
-
-**claude-code-ide-extras-lsp**
-Semantic code understanding via LSP integration:
-- Buffer formatting through language servers
-- Hover information and type signatures
-- Documentation lookup at point
+Convenience package that installs and configures all extension packages at once. Automatically detects which optional dependencies are available and registers only their tools.
 
 **claude-code-ide-extras-emacs**
 Emacs introspection and buffer access:
@@ -98,7 +85,45 @@ Emacs introspection and buffer access:
 - Command and symbol discovery
 - Documentation search across all loaded packages
 - Direct buffer read and search capabilities
+- Elisp evaluation and function reloading
+- Point/region manipulation
+- Cross-reference navigation (definitions and references)
 - Efficient buffer-local variable discovery and retrieval with filtering
+
+**claude-code-ide-extras-projectile** (optional, requires projectile)
+Project-aware development tools via Projectile integration:
+- Asynchronous build and test execution
+- Compilation output query and search
+- Shell command execution in project context
+- Efficient buffer-local variable discovery and retrieval with filtering
+- Project file enumeration
+
+**claude-code-ide-extras-project** (optional, requires project.el / Emacs 28+)
+Project-aware development tools via built-in project.el:
+- Asynchronous build and test execution
+- Compilation output query and search
+- Shell command execution in project context
+- Efficient buffer-local variable discovery and retrieval with filtering
+- Project file enumeration
+
+**claude-code-ide-extras-lsp** (optional, requires lsp-mode)
+Semantic code understanding via lsp-mode integration:
+- Buffer formatting through language servers
+- Hover information and type signatures
+- Call hierarchy navigation (incoming callers / outgoing callees)
+- Find implementations of interfaces and abstract methods
+- Jump to type definitions
+
+**claude-code-ide-extras-eglot** (optional, requires eglot / Emacs 29+)
+Semantic code understanding via built-in Eglot integration:
+- Buffer formatting through language servers
+- Hover information and type signatures
+- LSP code action listing and execution
+- Workspace and document symbol search
+- Semantic rename across the project
+- Call hierarchy navigation (incoming callers / outgoing callees)
+- Find implementations of interfaces and abstract methods
+- Jump to type definitions
 
 **claude-code-ide-extras-meta**
 Meta-level tools about the MCP tools themselves:
@@ -116,8 +141,12 @@ These tools operate on Emacs buffers rather than external processes, providing u
 
 - Emacs 30.1+
 - claude-code-ide (unversioned)
+
+Optional (modules load automatically when available):
 - projectile 2.9.1+ (for projectile package)
+- project.el (built-in with Emacs 28+, for project package)
 - lsp-mode 20251112.625+ (for lsp package)
+- eglot (built-in with Emacs 29+, for eglot package)
 
 ## Installation
 
@@ -129,12 +158,14 @@ Install from local checkout using package-vc:
 (let ((extras-dir (expand-file-name "dev/claude-code-ide-extras" user-emacs-directory)))
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-emacs")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-lsp")
+  (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-eglot")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-meta")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-projectile")
+  (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-project")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras"))
 
 (use-package claude-code-ide-extras
-  :after (projectile lsp-mode claude-code-ide)
+  :after claude-code-ide
   :demand t
   :config
   (claude-code-ide-extras-setup))
@@ -147,7 +178,7 @@ Once published to MELPA:
 ```elisp
 (use-package claude-code-ide-extras
   :ensure t
-  :after (projectile lsp-mode claude-code-ide)
+  :after claude-code-ide
   :demand t
   :config
   (claude-code-ide-extras-setup))
@@ -158,49 +189,29 @@ Once published to MELPA:
 Install only the packages you need:
 
 ```elisp
+;; Core Emacs introspection (always available)
 (use-package claude-code-ide-extras-emacs
   :after claude-code-ide
   :demand t
   :config
   (claude-code-ide-extras-emacs-setup))
+
+;; Eglot LSP tools (for built-in Eglot users)
+(use-package claude-code-ide-extras-eglot
+  :after (claude-code-ide eglot)
+  :demand t
+  :config
+  (claude-code-ide-extras-eglot-setup))
+
+;; project.el tools (for built-in project.el users)
+(use-package claude-code-ide-extras-project
+  :after claude-code-ide
+  :demand t
+  :config
+  (claude-code-ide-extras-project-setup))
 ```
 
 ## Available Tools
-
-### Projectile (10 tools)
-
-**task_start** - Launch project tasks (compile, test, configure, install, package, run)
-Returns immediately with buffer name while task runs asynchronously.
-
-**task_wait** - Poll for task completion and retrieve output size
-Returns status and line/character counts when finished.
-
-**task_query** - Retrieve compilation output
-Supports line range queries (start + count) with negative indexing for tail access.
-
-**task_search** - Search compilation output with regex patterns
-Returns matching lines with optional context.
-
-**task_kill** - Terminate running compilation
-
-**get_project_buffer_local_keys** - List buffer-local variable names for project root
-Lightweight discovery returning only variable names. Optional Emacs regex filtering. Much cheaper than getting full variables.
-
-**get_project_buffer_local_variables** - Get buffer-local variables with values for project root
-Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
-
-**read_project_dir_locals** - DEPRECATED: Query project-level directory-local variables
-Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Returns ALL variables (very expensive).
-
-**get_project_files** - Enumerate all files in project
-Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore.
-
-### LSP (2 tools)
-
-**format_buffer** - Format file using LSP formatting
-
-**describe_thing_at_point** - Get hover information at specific location
-Returns type signatures, parameter lists, and documentation.
 
 ### Emacs (17 tools)
 
@@ -251,6 +262,106 @@ Uses point position for full semantic context, enabling accurate resolution of o
 
 **xref_find_references_at_point** - Find all references to symbol at location
 Point-based for semantic disambiguation. Essential for finding all usages of a symbol.
+
+### Projectile (9 tools, optional)
+
+**task_start** - Launch project tasks (compile, test, configure, install, package, run)
+Returns immediately with buffer name while task runs asynchronously.
+
+**task_wait** - Poll for task completion and retrieve output size
+Returns status and line/character counts when finished.
+
+**task_query** - Retrieve compilation output
+Supports line range queries (start + count) with negative indexing for tail access.
+
+**task_search** - Search compilation output with regex patterns
+Returns matching lines with optional context.
+
+**task_kill** - Terminate running compilation
+
+**get_project_buffer_local_keys** - List buffer-local variable names for project root
+Lightweight discovery returning only variable names. Optional Emacs regex filtering. Much cheaper than getting full variables.
+
+**get_project_buffer_local_variables** - Get buffer-local variables with values for project root
+Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
+
+**read_project_dir_locals** - DEPRECATED: Query project-level directory-local variables
+Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Returns ALL variables (very expensive).
+
+**get_project_files** - Enumerate all files in project
+Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore.
+
+### project.el (9 tools, optional)
+
+**task_start** - Launch project tasks (compile, test, configure, install, package, run)
+Returns immediately with buffer name while task runs asynchronously.
+
+**task_wait** - Poll for task completion and retrieve output size
+Returns status and line/character counts when finished.
+
+**task_query** - Retrieve compilation output
+Supports line range queries (start + count) with negative indexing for tail access.
+
+**task_search** - Search compilation output with regex patterns
+Returns matching lines with optional context.
+
+**task_kill** - Terminate running compilation
+
+**get_project_buffer_local_keys** - List buffer-local variable names for project root
+Lightweight discovery returning only variable names. Optional Emacs regex filtering.
+
+**get_project_buffer_local_variables** - Get buffer-local variables with values for project root
+Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
+
+**read_project_dir_locals** - DEPRECATED: Query project-level directory-local variables
+Use get_project_buffer_local_keys/get_project_buffer_local_variables instead.
+
+**get_project_files** - Enumerate all files in project
+Returns list of file paths. Uses project.el's file discovery, respects .gitignore rules.
+
+### LSP (5 tools, optional)
+
+**format_buffer** - Format file using LSP formatting
+
+**describe_thing_at_point** - Get hover information at specific location
+Returns type signatures, parameter lists, and documentation.
+
+**call_hierarchy** - Show incoming callers or outgoing callees
+Uses the two-step LSP call hierarchy protocol. Specify direction as "incoming" or "outgoing".
+
+**find_implementations** - Find implementations of interfaces and abstract methods
+Returns file:line locations for all implementations.
+
+**type_definition** - Jump to type definition of a symbol
+Returns the file:line location where the type is defined.
+
+### Eglot (9 tools, optional)
+
+**format_buffer** - Format file using Eglot LSP formatting
+
+**describe_thing_at_point** - Get hover information at specific location
+Returns type signatures, parameter lists, and documentation.
+
+**code_actions** - List or execute LSP code actions at a position
+Without action_title, lists available actions. With action_title, executes the matching action. Optional action_kind filter (e.g. "quickfix", "refactor.extract").
+
+**workspace_symbols** - Search for symbols across the workspace
+Returns matching symbol names, kinds, locations, and containers.
+
+**document_symbols** - Get structured outline of symbols in a file
+Returns hierarchical symbol names, kinds, and line ranges.
+
+**rename** - Rename a symbol across the project
+Applies changes to all references and saves affected buffers.
+
+**call_hierarchy** - Show incoming callers or outgoing callees
+Uses the two-step LSP call hierarchy protocol. Specify direction as "incoming" or "outgoing".
+
+**find_implementations** - Find implementations of interfaces and abstract methods
+Returns file:line locations for all implementations.
+
+**type_definition** - Jump to type definition of a symbol
+Returns the file:line location where the type is defined.
 
 ### Meta (1 tool)
 
@@ -376,7 +487,8 @@ Claude retrieves this guidance by calling `get_mcp_custom_advice()` at session s
 This package grants Claude access to:
 - **Execute arbitrary shell commands** in project context via `task_start`
 - **Read any Emacs buffer** including scratch buffers, compilation output, and logs
-- **Format and modify files** via LSP integration
+- **Evaluate arbitrary elisp** in your running Emacs session via `eval_elisp`
+- **Format, rename, and modify files** via LSP integration (lsp-mode or Eglot)
 
 **Intended use**: Personal development environments and work machines with trusted projects and codebases.
 
@@ -399,7 +511,10 @@ The package suite uses a layered architecture:
 
 - Common library provides shared buffer utilities (search, query)
 - Individual packages implement domain-specific MCP tools
-- Meta-package provides unified installation and setup
+- Optional modules (projectile/project.el, lsp-mode/eglot) load conditionally based on available dependencies
+- Meta-package provides unified installation and setup with automatic detection
+
+Users choose one project backend (projectile or project.el) and one LSP backend (lsp-mode or eglot) based on their existing configuration. The meta-package handles this automatically.
 
 All tool implementations use `claude-code-ide-mcp-server-with-session-context` to integrate with the claude-code-ide framework.
 
