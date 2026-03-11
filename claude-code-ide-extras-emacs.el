@@ -135,6 +135,14 @@
   "claude-code-ide-extras-emacs/xref_find_references_at_point"
   "MCP tool name for xref_find_references_at_point.")
 
+(defconst claude-code-ide-extras-emacs-get-point-position-tool-name
+  "claude-code-ide-extras-emacs/get_point_position"
+  "MCP tool name for get_point_position.")
+
+(defconst claude-code-ide-extras-emacs-get-buffers-tool-name
+  "claude-code-ide-extras-emacs/get_buffers"
+  "MCP tool name for get_buffers.")
+
 ;;; Customization
 
 (defcustom claude-code-ide-extras-emacs-describe-usage-prompt
@@ -306,6 +314,26 @@
 (put 'claude-code-ide-extras-emacs-xref-find-references-at-point-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-emacs-xref-find-references-at-point-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-get-point-position-usage-prompt
+  "Get current point position in a buffer. Returns line (1-based) and column (0-based) as a Lisp alist."
+  "Usage guidance for the get_point_position MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-get-point-position-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-get-point-position-tool-name)
+
+(defcustom claude-code-ide-extras-emacs-get-buffers-usage-prompt
+  "List all open Emacs buffers with name, mode, file, and modified status. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only)."
+  "Usage guidance for the get_buffers MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-emacs)
+
+(put 'claude-code-ide-extras-emacs-get-buffers-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-emacs-get-buffers-tool-name)
 
 ;;; Tool implementations
 
@@ -634,6 +662,52 @@ For \"restore\": Restore point to position saved with TOKEN.
         ;; Top-level error handler for unexpected failures
         (error (format "Error positioning point: %s" (error-message-string err))))))
 
+  (defun claude-code-ide-extras-emacs--get-point-position (buffer-name)
+    "Return the current point position in BUFFER-NAME as a Lisp alist.
+Returns ((line . N) (column . N)) where line is 1-based and column is
+0-based, matching the coordinate conventions used by position_point and
+all other tools in this package."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let ((buffer (get-buffer buffer-name)))
+            (if (not buffer)
+                (format "Error: Buffer '%s' does not exist" buffer-name)
+              (with-current-buffer buffer
+                (let* ((line (line-number-at-pos))
+                       (column (- (point) (line-beginning-position))))
+                  (format "%S" `((line . ,line) (column . ,column)))))))
+        (error (format "Error getting point position: %s" (error-message-string err))))))
+
+  (defun claude-code-ide-extras-emacs--get-buffers (&optional filter-regex mode-filter files-only)
+    "Return all open Emacs buffers as a Lisp form.
+Each entry is an alist with name, mode, file, and modified fields.
+
+Optional FILTER-REGEX (Emacs regex) filters by buffer name.
+Optional MODE-FILTER (Emacs regex) filters by major mode name.
+When FILES-ONLY is non-nil, only file-visiting buffers are included."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (format "%S"
+                  (delq nil
+                        (mapcar
+                         (lambda (buf)
+                           (let* ((name (buffer-name buf))
+                                  (mode (with-current-buffer buf major-mode))
+                                  (file (buffer-file-name buf))
+                                  (modified (buffer-modified-p buf)))
+                             (when (and (or (not filter-regex)
+                                            (string-match-p filter-regex name))
+                                        (or (not mode-filter)
+                                            (string-match-p mode-filter (symbol-name mode)))
+                                        (or (not files-only)
+                                            file))
+                               `((name . ,name)
+                                 (mode . ,mode)
+                                 (file . ,file)
+                                 (modified . ,modified)))))
+                         (buffer-list))))
+        (error (format "Error listing buffers: %s" (error-message-string err))))))
+
   (defun claude-code-ide-extras-emacs--select-region (buffer-name start-line start-column end-line end-column)
     "Select region in BUFFER-NAME from START-LINE:START-COLUMN to END-LINE:END-COLUMN.
 Lines are 1-based, columns are 0-based (consistent with Emacs conventions).
@@ -920,7 +994,7 @@ If no references found, returns a message indicating that."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-emacs--find-file
    :name claude-code-ide-extras-emacs-find-file-tool-name
-   :description "Open a file into an Emacs buffer without displaying it to the user. Required before using LSP tools like format on files that have been edited but not yet opened. Returns the buffer name."
+   :description "Open a file into an Emacs buffer without displaying it to the user. Returns the buffer name. Use cases: (1) required before LSP tools on files edited via Write/Edit but not yet opened; (2) resolve a file path to a buffer name when you need one (e.g., for buffer_query or position_point)."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to the file to open.")))
@@ -993,6 +1067,31 @@ If no references found, returns a message indicating that."
            (:name "column"
             :type number
             :description "Column number (0-based).")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--get-point-position
+   :name claude-code-ide-extras-emacs-get-point-position-tool-name
+   :description "Get the current point position in a buffer. Returns a Lisp alist ((line . N) (column . N)) where line is 1-based and column is 0-based, matching the conventions used by position_point and all other tools."
+   :args '((:name "buffer_name"
+            :type string
+            :description "Name of the buffer to query.")))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-emacs--get-buffers
+   :name claude-code-ide-extras-emacs-get-buffers-tool-name
+   :description "List all open Emacs buffers. Returns a Lisp list of alists, each with name, mode, file (nil if not visiting a file), and modified fields. Use filter_regex to match buffer names, mode_filter to match major mode, or files_only to restrict to file-visiting buffers."
+   :args '((:name "filter_regex"
+            :type string
+            :description "Optional Emacs regex to filter by buffer name (e.g., \"\\*compilation\" or \"\\.cpp$\")."
+            :optional t)
+           (:name "mode_filter"
+            :type string
+            :description "Optional Emacs regex to filter by major mode name (e.g., \"c++-mode\" or \"compilation-mode\")."
+            :optional t)
+           (:name "files_only"
+            :type boolean
+            :description "When true, return only buffers that are visiting a file."
+            :optional t)))
 
   (message "Claude Code IDE Extras: Emacs tools registered"))
 

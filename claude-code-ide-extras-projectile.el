@@ -90,6 +90,10 @@
   "claude-code-ide-extras-projectile/get_project_files"
   "MCP tool name for get_project_files.")
 
+(defconst claude-code-ide-extras-projectile-get-project-buffers-tool-name
+  "claude-code-ide-extras-projectile/get_project_buffers"
+  "MCP tool name for get_project_buffers.")
+
 ;;; Customization
 
 (defcustom claude-code-ide-extras-projectile-read-project-dir-locals-usage-prompt
@@ -183,7 +187,7 @@
      claude-code-ide-extras-projectile-read-project-dir-locals-tool-name)
 
 (defcustom claude-code-ide-extras-projectile-get-project-files-usage-prompt
-  "Enumerate all files in the current project. Fast using projectile cache."
+  "Enumerate all files in the current project. Fast using projectile cache. Optional filter_regex (Emacs regex) to filter by file path."
   "Usage guidance for the get_project_files MCP tool."
   :type 'string
   :group 'claude-code-ide-extras-projectile)
@@ -191,6 +195,16 @@
 (put 'claude-code-ide-extras-projectile-get-project-files-usage-prompt
      'claude-code-ide-extras-mcp-tool-name
      claude-code-ide-extras-projectile-get-project-files-tool-name)
+
+(defcustom claude-code-ide-extras-projectile-get-project-buffers-usage-prompt
+  "List open buffers belonging to the current project. Returns name, mode, file, and modified status. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only)."
+  "Usage guidance for the get_project_buffers MCP tool."
+  :type 'string
+  :group 'claude-code-ide-extras-projectile)
+
+(put 'claude-code-ide-extras-projectile-get-project-buffers-usage-prompt
+     'claude-code-ide-extras-mcp-tool-name
+     claude-code-ide-extras-projectile-get-project-buffers-tool-name)
 
 ;;; Tool implementations
 
@@ -358,8 +372,8 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
     (claude-code-ide-mcp-server-with-session-context nil
       (claude-code-ide-extras-common--buffer-search buffer-name pattern context-lines)))
 
-  ;; Project file enumeration
-  (defun claude-code-ide-extras-projectile--get-project-files ()
+  ;; Project file and buffer enumeration
+  (defun claude-code-ide-extras-projectile--get-project-files (&optional filter-regex)
     "Enumerate all files in the current project.
 
 Uses projectile's cached file list for speed. Returns files as a list of
@@ -367,15 +381,55 @@ paths relative to the project root. This is much faster than using find
 because projectile maintains an up-to-date cache of project files.
 
 The file list respects projectile's ignore rules (from .projectile,
-.gitignore, etc.), so generated files and dependencies are excluded."
+.gitignore, etc.), so generated files and dependencies are excluded.
+
+Optional FILTER-REGEX (Emacs regex) filters the returned paths."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let ((project-root (projectile-project-root)))
             (if (not project-root)
                 "Error: Not in a projectile project"
-              ;; projectile-current-project-files returns files relative to project root
-              (projectile-current-project-files)))
+              (let ((files (projectile-current-project-files)))
+                (if filter-regex
+                    (seq-filter (lambda (f) (string-match-p filter-regex f)) files)
+                  files))))
         (error (format "Error getting project files: %s" (error-message-string err))))))
+
+  (defun claude-code-ide-extras-projectile--get-project-buffers (&optional filter-regex mode-filter files-only)
+    "Return open buffers belonging to the current project as a Lisp form.
+Each entry is an alist with name, mode, file, and modified fields.
+
+Uses projectile-project-buffers, which includes buffers visiting project
+files and project-associated buffers such as compilation buffers.
+
+Optional FILTER-REGEX (Emacs regex) filters by buffer name.
+Optional MODE-FILTER (Emacs regex) filters by major mode name.
+When FILES-ONLY is non-nil, only file-visiting buffers are included."
+    (claude-code-ide-mcp-server-with-session-context nil
+      (condition-case err
+          (let ((project-root (projectile-project-root)))
+            (if (not project-root)
+                "Error: Not in a projectile project"
+              (format "%S"
+                      (delq nil
+                            (mapcar
+                             (lambda (buf)
+                               (let* ((name (buffer-name buf))
+                                      (mode (with-current-buffer buf major-mode))
+                                      (file (buffer-file-name buf))
+                                      (modified (buffer-modified-p buf)))
+                                 (when (and (or (not filter-regex)
+                                                (string-match-p filter-regex name))
+                                            (or (not mode-filter)
+                                                (string-match-p mode-filter (symbol-name mode)))
+                                            (or (not files-only)
+                                                file))
+                                   `((name . ,name)
+                                     (mode . ,mode)
+                                     (file . ,file)
+                                     (modified . ,modified)))))
+                             (projectile-project-buffers))))))
+        (error (format "Error listing project buffers: %s" (error-message-string err))))))
 
 ;;; Tool registration
 
@@ -481,8 +535,28 @@ The file list respects projectile's ignore rules (from .projectile,
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--get-project-files
    :name claude-code-ide-extras-projectile-get-project-files-tool-name
-   :description "Enumerate all files in the current project. Returns a list of file paths relative to project root. Uses projectile's cached file list for speed, respecting ignore rules from .projectile and .gitignore."
-   :args nil)
+   :description "Enumerate all files in the current project. Returns a list of file paths relative to project root. Uses projectile's cached file list for speed, respecting ignore rules from .projectile and .gitignore. Optional filter_regex (Emacs regex) to narrow results."
+   :args '((:name "filter_regex"
+            :type string
+            :description "Optional Emacs regex to filter file paths (e.g., \"\\.cpp$\" or \"^test/\")."
+            :optional t)))
+
+  (claude-code-ide-make-tool
+   :function #'claude-code-ide-extras-projectile--get-project-buffers
+   :name claude-code-ide-extras-projectile-get-project-buffers-tool-name
+   :description "List open buffers belonging to the current project. Returns a Lisp list of alists, each with name, mode, file (nil if not visiting a file), and modified fields. Includes source buffers and project-associated buffers such as compilation buffers. Use filter_regex to match buffer names, mode_filter to match major mode, or files_only to restrict to file-visiting buffers."
+   :args '((:name "filter_regex"
+            :type string
+            :description "Optional Emacs regex to filter by buffer name (e.g., \"\\*compilation\" or \"\\.cpp$\")."
+            :optional t)
+           (:name "mode_filter"
+            :type string
+            :description "Optional Emacs regex to filter by major mode name (e.g., \"c++-mode\" or \"compilation-mode\")."
+            :optional t)
+           (:name "files_only"
+            :type boolean
+            :description "When true, return only buffers that are visiting a file."
+            :optional t)))
 
   (message "Claude Code IDE Extras: Projectile tools registered"))
 

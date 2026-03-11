@@ -167,7 +167,7 @@ Install only the packages you need:
 
 ## Available Tools
 
-### Projectile (10 tools)
+### Projectile (11 tools)
 
 **task_start** - Launch project tasks (compile, test, configure, install, package, run)
 Returns immediately with buffer name while task runs asynchronously.
@@ -193,7 +193,10 @@ Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without
 Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Returns ALL variables (very expensive).
 
 **get_project_files** - Enumerate all files in project
-Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore.
+Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore. Optional Emacs regex filter on file paths.
+
+**get_project_buffers** - List open buffers belonging to the current project
+Returns Lisp list of alists with name, mode, file, and modified fields. Includes source buffers and project-associated buffers such as compilation buffers. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only).
 
 ### LSP (2 tools)
 
@@ -202,7 +205,7 @@ Returns list of relative paths. Uses projectile cache for speed, respects ignore
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Emacs (17 tools)
+### Emacs (19 tools)
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -237,8 +240,8 @@ Takes buffer name, start/end line and column, evaluates the code and returns res
 **eval_defun_at_point** - Evaluate function definition at point
 Essential for reloading function definitions during iterative development.
 
-**find_file** - Open file into buffer
-Opens file without displaying it. Required before using LSP tools on edited files.
+**find_file** - Open file into buffer, returns buffer name
+Opens file without displaying it. Required before using LSP tools on edited files. Also useful as a file-path-to-buffer-name lookup.
 
 **position_point** - Move and restore point position
 Set action moves point and returns token. Restore action returns point to saved position.
@@ -251,6 +254,12 @@ Uses point position for full semantic context, enabling accurate resolution of o
 
 **xref_find_references_at_point** - Find all references to symbol at location
 Point-based for semantic disambiguation. Essential for finding all usages of a symbol.
+
+**get_point_position** - Get current point position in a buffer
+Returns `((line . N) (column . N))` with 1-based line and 0-based column. Counterpart to position_point.
+
+**get_buffers** - List all open Emacs buffers
+Returns Lisp list of alists with name, mode, file, and modified fields. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only). Use when you need to find a buffer by name or mode across the entire Emacs session.
 
 ### Meta (1 tool)
 
