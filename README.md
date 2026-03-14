@@ -74,7 +74,7 @@ The remainder of this `README.md` was written by Claude Code.
 
 ## Overview
 
-This repository provides eleven packages that extend claude-code-ide with additional MCP tools:
+This repository provides twelve packages that extend claude-code-ide with additional MCP tools:
 
 **claude-code-ide-extras** (meta-package)
 Convenience package that installs and configures all extension packages at once. Automatically detects which optional dependencies are available and registers only their tools.
@@ -160,6 +160,14 @@ File system metadata without loading buffers:
 - Directory listing with optional glob filtering
 - Recursive file search by regex pattern
 
+**claude-code-ide-extras-org**
+Org-babel and export integration:
+- Execute named source blocks or all blocks in a file
+- Read existing results without re-executing
+- Tangle code blocks to source files
+- Export to PDF, HTML, LaTeX, Markdown, and Jupyter notebooks (ipynb)
+- Inspect export settings and babel block inventory
+
 **claude-code-ide-extras-common** (internal library)
 Shared utilities used by other packages. Not intended for direct use.
 
@@ -200,6 +208,7 @@ Install from local checkout using package-vc:
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-git")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-testing")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-files")
+  (package-vc-install-from-checkout extras-dir "claude-code-ide-extras-org")
   (package-vc-install-from-checkout extras-dir "claude-code-ide-extras"))
 
 (use-package claude-code-ide-extras
@@ -467,6 +476,29 @@ Shows name, type, size, and modification time. Optional glob pattern filter and 
 
 **find_files** - Find files matching a pattern
 Searches a directory tree by regex with configurable result limit.
+
+### Org (7 tools)
+
+**list_babel_blocks** - List all source blocks in an org file
+Shows line number, language, name, and header arguments for each block.
+
+**babel_execute** - Execute a named source block
+Runs the block and returns its result. Requires the file to be open.
+
+**babel_execute_buffer** - Execute all source blocks in order
+Runs every block in sequence, like "Run All" in a notebook. Returns execution summary.
+
+**get_babel_result** - Read existing result without re-executing
+Retrieves the current #+RESULTS for a named block. Useful for checking computed output.
+
+**babel_tangle** - Tangle code blocks to source files
+Tangles the entire file or a specific named block. Returns list of output files.
+
+**org_export** - Export to PDF, HTML, LaTeX, Markdown, or Jupyter notebook
+Dispatches to the appropriate Org export backend. Supports async export. Returns output file path.
+
+**get_export_settings** - Read export configuration
+Lists all #+KEYWORD settings (TITLE, AUTHOR, OPTIONS, PROPERTY, etc.) from the file.
 
 ### Meta (1 tool)
 

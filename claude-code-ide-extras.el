@@ -38,6 +38,7 @@
 ;; - claude-code-ide-extras-git: Git status, diff, log, blame (via vc.el)
 ;; - claude-code-ide-extras-testing: ERT test discovery and execution
 ;; - claude-code-ide-extras-files: File metadata, directory listing, file search
+;; - claude-code-ide-extras-org: Org-babel execution, tangle, and export
 ;;
 ;; Installation:
 ;;
@@ -56,6 +57,7 @@
 (require 'claude-code-ide-extras-buffers)
 (require 'claude-code-ide-extras-files)
 (require 'claude-code-ide-extras-testing)
+(require 'claude-code-ide-extras-org)
 
 ;; Optional modules — only load if their dependencies are available
 ;; condition-case needed because the files exist but may have hard
@@ -91,6 +93,7 @@ This registers all MCP tools from projectile, emacs, lsp, and meta packages."
   (claude-code-ide-extras-buffers-setup)
   (claude-code-ide-extras-files-setup)
   (claude-code-ide-extras-testing-setup)
+  (claude-code-ide-extras-org-setup)
   (when claude-code-ide-extras--lsp-available
     (claude-code-ide-extras-lsp-setup))
   (when claude-code-ide-extras--projectile-available
