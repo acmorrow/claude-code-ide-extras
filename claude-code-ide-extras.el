@@ -33,6 +33,11 @@
 ;; - claude-code-ide-extras-meta: Tools about the MCP tools themselves
 ;; - claude-code-ide-extras-projectile: Project tasks and shell execution (via projectile)
 ;; - claude-code-ide-extras-project: Project tasks and shell execution (via project.el)
+;; - claude-code-ide-extras-buffers: Buffer listing and inspection
+;; - claude-code-ide-extras-diagnostics: Flycheck/flymake diagnostics
+;; - claude-code-ide-extras-git: Git status, diff, log, blame (via vc.el)
+;; - claude-code-ide-extras-testing: ERT test discovery and execution
+;; - claude-code-ide-extras-files: File metadata, directory listing, file search
 ;;
 ;; Installation:
 ;;
@@ -48,6 +53,9 @@
 
 (require 'claude-code-ide-extras-emacs)
 (require 'claude-code-ide-extras-meta)
+(require 'claude-code-ide-extras-buffers)
+(require 'claude-code-ide-extras-files)
+(require 'claude-code-ide-extras-testing)
 
 ;; Optional modules — only load if their dependencies are available
 ;; condition-case needed because the files exist but may have hard
@@ -60,6 +68,10 @@
   (condition-case nil (require 'claude-code-ide-extras-eglot nil t) (error nil)))
 (defvar claude-code-ide-extras--project-available
   (condition-case nil (require 'claude-code-ide-extras-project nil t) (error nil)))
+(defvar claude-code-ide-extras--diagnostics-available
+  (condition-case nil (require 'claude-code-ide-extras-diagnostics nil t) (error nil)))
+(defvar claude-code-ide-extras--git-available
+  (condition-case nil (require 'claude-code-ide-extras-git nil t) (error nil)))
 
 (defgroup claude-code-ide-extras nil
   "MCP tools suite for claude-code-ide."
@@ -76,6 +88,9 @@ This registers all MCP tools from projectile, emacs, lsp, and meta packages."
   (interactive)
   (claude-code-ide-extras-emacs-setup)
   (claude-code-ide-extras-meta-setup)
+  (claude-code-ide-extras-buffers-setup)
+  (claude-code-ide-extras-files-setup)
+  (claude-code-ide-extras-testing-setup)
   (when claude-code-ide-extras--lsp-available
     (claude-code-ide-extras-lsp-setup))
   (when claude-code-ide-extras--projectile-available
@@ -84,6 +99,10 @@ This registers all MCP tools from projectile, emacs, lsp, and meta packages."
     (claude-code-ide-extras-eglot-setup))
   (when claude-code-ide-extras--project-available
     (claude-code-ide-extras-project-setup))
+  (when claude-code-ide-extras--diagnostics-available
+    (claude-code-ide-extras-diagnostics-setup))
+  (when claude-code-ide-extras--git-available
+    (claude-code-ide-extras-git-setup))
   (message "Claude Code IDE Extras: All tools registered"))
 
 (provide 'claude-code-ide-extras)
