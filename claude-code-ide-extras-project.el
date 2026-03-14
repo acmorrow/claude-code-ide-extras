@@ -55,7 +55,7 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-project-")
 
-(defconst claude-code-ide-extras-project-version "0.0.3"
+(defconst claude-code-ide-extras-project-version "0.0.4"
   "Version of claude-code-ide-extras-project.")
 
 ;;; MCP Tool Names

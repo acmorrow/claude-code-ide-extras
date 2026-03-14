@@ -3,6 +3,8 @@
 ;; Copyright (C) 2025 Andrew Morrow
 
 ;; Author: Andrew Morrow <andrew.c.morrow@gmail.com>
+;; Version: 0.0.4
+;; Package-Requires: ((emacs "29.1") (claude-code-ide "0.1"))
 ;; Keywords: tools, ai, claude, mcp
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -64,7 +66,7 @@
   :group 'tools
   :prefix "claude-code-ide-extras-")
 
-(defconst claude-code-ide-extras-version "0.0.3"
+(defconst claude-code-ide-extras-version "0.0.4"
   "Version of claude-code-ide-extras.")
 
 ;;;###autoload
