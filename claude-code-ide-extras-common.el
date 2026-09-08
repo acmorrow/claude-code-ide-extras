@@ -26,7 +26,7 @@
 ;; MCP tool implementations.
 ;;
 ;; This is an internal library - no MCP tools are registered here.
-;; Other packages (projectile, core, lsp) depend on this library.
+;; Other packages (extras-emacs, extras-lsp, extras-projectile) depend on this library.
 ;;
 ;; Part of the claude-code-ide-extras suite.
 

@@ -73,7 +73,7 @@ The remainder of this `README.md` was written by Claude Code.
 
 ## Overview
 
-This repository provides four packages that extend claude-code-ide with additional MCP tools:
+This repository provides the following packages that extend claude-code-ide with additional MCP tools:
 
 **claude-code-ide-extras** (meta-package)
 Convenience package that installs and configures all extension packages at once.
@@ -167,7 +167,7 @@ Install only the packages you need:
 
 ## Available Tools
 
-### Projectile (11 tools)
+### Projectile
 
 **task_start** - Launch project tasks (compile, test, configure, install, package, run)
 Returns immediately with buffer name while task runs asynchronously.
@@ -198,14 +198,14 @@ Returns list of relative paths. Uses projectile cache for speed, respects ignore
 **get_project_buffers** - List open buffers belonging to the current project
 Returns Lisp list of alists with name, mode, file, and modified fields. Includes source buffers and project-associated buffers such as compilation buffers. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only).
 
-### LSP (2 tools)
+### LSP
 
 **format_buffer** - Format file using LSP formatting
 
 **describe_thing_at_point** - Get hover information at specific location
 Returns type signatures, parameter lists, and documentation.
 
-### Emacs (19 tools)
+### Emacs
 
 **describe** - Get documentation for Emacs symbols
 Supports functions, variables, modes, packages, and symbols.
@@ -261,7 +261,7 @@ Returns `((line . N) (column . N))` with 1-based line and 0-based column. Counte
 **get_buffers** - List all open Emacs buffers
 Returns Lisp list of alists with name, mode, file, and modified fields. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only). Use when you need to find a buffer by name or mode across the entire Emacs session.
 
-### Meta (1 tool)
+### Meta
 
 **get_mcp_custom_advice** - Retrieve project-specific tool usage guidance
 Reads customization variables configured via :custom or .dir-locals.el, returning guidance for all registered MCP tools.
