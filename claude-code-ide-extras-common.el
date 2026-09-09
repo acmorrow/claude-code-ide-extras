@@ -99,6 +99,29 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
             (with-current-buffer saved-occur-buf
               (rename-buffer "*Occur*"))))))))
 
+(defun claude-code-ide-extras-common--format-content (content)
+  "Format CONTENT into the string form returned by the buffer query tools.
+Lines longer than `claude-code-ide-extras-common-max-line-length' are
+truncated to a bare prefix.  The truncation is not marked, so a cut line is
+indistinguishable from a complete one of that exact length - a caller
+reconstructing text from this output cannot tell anything was removed.
+
+Blank lines are preserved.  `split-string' is called without its omit-nulls
+argument because callers reconstruct text from this output in order to match it
+against a file, and a silently discarded empty line makes that match fail.  The
+single trailing empty element that CONTENT's own final newline produces is
+dropped, so the result never gains a blank line the source did not have."
+  (let ((lines (split-string content "\n")))
+    (when (and lines (equal "" (car (last lines))))
+      (setq lines (butlast lines)))
+    (string-join
+     (mapcar (lambda (line)
+               (if (> (length line) claude-code-ide-extras-common-max-line-length)
+                   (substring line 0 claude-code-ide-extras-common-max-line-length)
+                 line))
+             lines)
+     "\n")))
+
 (defun claude-code-ide-extras-common--buffer-query (buffer-name &optional start-line num-lines)
   "Retrieve contents from BUFFER-NAME.
 BUFFER-NAME is the name of the buffer to query.
@@ -129,18 +152,8 @@ Returns the buffer contents for the specified line range."
         (save-excursion
           (if (not start-line)
               ;; Extract entire buffer. Simple case - no range calculation needed.
-              (let* ((content (buffer-substring-no-properties (point-min) (point-max)))
-                     (lines (split-string content "\n" t)))
-                (string-join
-                 (mapcar (lambda (line)
-                           ;; Truncate excessively long lines to prevent token overflow
-                           ;; in Claude's context window. Long lines are typically
-                           ;; minified code or data dumps, not useful for reasoning.
-                           (if (> (length line) claude-code-ide-extras-common-max-line-length)
-                               (substring line 0 claude-code-ide-extras-common-max-line-length)
-                             line))
-                         lines)
-                 "\n"))
+              (claude-code-ide-extras-common--format-content
+               (buffer-substring-no-properties (point-min) (point-max)))
 
             ;; Extract specific range. Handle negative indexing where -1 means
             ;; last line, -100 means 100th line from end. This matches common
@@ -162,16 +175,8 @@ Returns the buffer contents for the specified line range."
                      ;; forward-line moves point, doesn't return position.
                      (_ (forward-line num-lines))
                      (end-pos (point))
-                     (content (buffer-substring-no-properties start-pos end-pos))
-                     (lines (split-string content "\n" t)))
-                ;; Apply same truncation as whole-buffer case.
-                (string-join
-                 (mapcar (lambda (line)
-                           (if (> (length line) claude-code-ide-extras-common-max-line-length)
-                               (substring line 0 claude-code-ide-extras-common-max-line-length)
-                             line))
-                         lines)
-                 "\n")))))))))
+                     (content (buffer-substring-no-properties start-pos end-pos)))
+                (claude-code-ide-extras-common--format-content content)))))))))
 
 ;;; Buffer-local variable utilities
 
