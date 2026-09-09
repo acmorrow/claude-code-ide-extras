@@ -356,7 +356,7 @@ TYPE is one of: function, variable, mode, package, symbol."
                       ("mode" (describe-function symbol))
                       ("package" (describe-package symbol))
                       ("symbol" (describe-symbol symbol))
-                      (_ (error "Unknown type '%s'. Must be one of: function, variable, mode, package, symbol" type))))
+                      (_ (error "Unknown type '%s'.  Must be one of: function, variable, mode, package, symbol" type))))
                   (with-current-buffer temp-buf
                     (buffer-string)))
               (when (buffer-live-p temp-buf)
@@ -434,7 +434,8 @@ Optional FILTER-REGEX (Emacs regex) filters the returned names."
   (defun claude-code-ide-extras-emacs--get-buffer-local-variables (file-path &optional filter-regex)
     "Get buffer-local variables with values for FILE-PATH.
 Opens FILE-PATH and returns buffer-local-variables as a Lisp form.
-Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values."
+Optional FILTER-REGEX (Emacs regex) filters variables by name before
+retrieving values."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (claude-code-ide-extras-common--get-buffer-local-variables file-path filter-regex)
@@ -519,7 +520,8 @@ provide the right primitive for each use case."
         (error (format "Error evaluating region: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--eval-defun-at-point (buffer-name line column)
-    "Evaluate the defun at point in BUFFER-NAME at LINE:COLUMN with FULL Emacs privileges.
+    "Evaluate the defun at point in BUFFER-NAME at LINE:COLUMN.
+This executes arbitrary elisp with full Emacs privileges.
 
 LINE is 1-based, COLUMN is 0-based (consistent with Emacs conventions).
 
@@ -587,11 +589,11 @@ marker adjusts to maintain its logical location. Without this, restore would
 jump to the wrong place after edits.
 
 Keys are token strings (format: \"buffer-name-timestamp\"), values are marker
-objects pointing into buffers. Markers are created on 'set' action via
+objects pointing into buffers. Markers are created on \"set\" action via
 point-marker, stored in the hash with a unique token, and cleaned up on
-'restore' action via remhash.
+\"restore\" action via remhash.
 
-Potential memory leak exists if Claude calls 'set' but never 'restore' (due
+Potential memory leak exists if Claude calls \"set\" but never \"restore\" (due
 to error, user interruption, or forgetting). The marker persists in the hash
 table, leaking a small amount of memory (marker object plus hash entry). This
 is acceptable because typical usage is set/restore pairs within a single tool
@@ -709,7 +711,8 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
         (error (format "Error listing buffers: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--select-region (buffer-name start-line start-column end-line end-column)
-    "Select region in BUFFER-NAME from START-LINE:START-COLUMN to END-LINE:END-COLUMN.
+    "Select the region in BUFFER-NAME between two positions.
+The region runs from START-LINE:START-COLUMN to END-LINE:END-COLUMN.
 Lines are 1-based, columns are 0-based (consistent with Emacs conventions).
 
 Sets mark at start position and moves point to end position, then activates

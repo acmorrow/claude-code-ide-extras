@@ -22,7 +22,7 @@
 ;;; Commentary:
 
 ;; This package provides common utilities shared across claude-code-ide-extras
-;; packages. It includes buffer search and query utilities used by multiple
+;; packages.  It includes buffer search and query utilities used by multiple
 ;; MCP tool implementations.
 ;;
 ;; This is an internal library - no MCP tools are registered here.
@@ -147,7 +147,7 @@ Returns the buffer contents for the specified line range."
       ;; content" or "specific range", never "partial range specification".
       (when (or (and start-line (not num-lines))
                 (and num-lines (not start-line)))
-        (error "start-line and num-lines must both be provided or both be omitted"))
+        (error "Both start-line and num-lines must be provided, or neither"))
       (with-current-buffer buf
         (save-excursion
           (if (not start-line)
@@ -188,9 +188,9 @@ Optional FILTER-REGEX (Emacs regex) filters the returned names.
 Only kills the buffer if it was opened by this function (not already open)."
   ;; Validate inputs
   (unless (and file-path (stringp file-path))
-    (error "file-path must be a non-nil string"))
+    (error "Argument file-path must be a non-nil string"))
   (when (file-directory-p file-path)
-    (error "file-path must be a file, not a directory: %s" file-path))
+    (error "Argument file-path must be a file, not a directory: %s" file-path))
 
   (let* ((existing-buffer (find-buffer-visiting file-path))
          (buffer (find-file-noselect file-path)))
@@ -222,15 +222,16 @@ Only kills the buffer if it was opened by this function (not already open)."
 
 (defun claude-code-ide-extras-common--get-buffer-local-variables (file-path &optional filter-regex)
   "Get buffer-local variables with values for FILE-PATH.
-Opens FILE-PATH and returns buffer-local-variables as a Lisp form.
-Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values.
+Opens FILE-PATH and returns `buffer-local-variables' as a Lisp form.
+Optional FILTER-REGEX (Emacs regex) filters variables by name before
+retrieving values.
 
 Only kills the buffer if it was opened by this function (not already open)."
   ;; Validate inputs
   (unless (and file-path (stringp file-path))
-    (error "file-path must be a non-nil string"))
+    (error "Argument file-path must be a non-nil string"))
   (when (file-directory-p file-path)
-    (error "file-path must be a file, not a directory: %s" file-path))
+    (error "Argument file-path must be a file, not a directory: %s" file-path))
 
   (let* ((existing-buffer (find-buffer-visiting file-path))
          (buffer (find-file-noselect file-path)))
@@ -260,7 +261,7 @@ Only kills the buffer if it was opened by this function (not already open)."
   "Get or create buffer for FILE-PATH with LSP initialized if deferred.
 If the buffer has lsp-deferred configured but not yet activated (indicated by
 lsp--buffer-deferred breadcrumb), this forces immediate LSP initialization by
-calling (lsp). This enables MCP tools to access semantic information without
+calling (lsp).  This enables MCP tools to access semantic information without
 requiring the buffer to be displayed.
 
 Returns the buffer, which may be newly created or pre-existing."

@@ -87,7 +87,7 @@ matches the loaded tool set."
       ;; Find all defcustoms with our metadata property
       (mapatoms
        (lambda (sym)
-         (when-let ((mcp-name (get sym 'claude-code-ide-extras-mcp-tool-name)))
+         (when-let* ((mcp-name (get sym 'claude-code-ide-extras-mcp-tool-name)))
            ;; Only include if the tool is actually registered
            (when (member mcp-name all-tools)
              (let ((value (symbol-value sym)))

@@ -133,7 +133,7 @@ FILE-PATH must be an absolute path to the file to format."
 Returns formatted hover text including type signature and documentation.
 LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
     (if (not file-path)
-        (error "file_path parameter is required")
+        (error "Parameter file_path is required")
       (claude-code-ide-mcp-server-with-session-context nil
         (let ((target-buffer (claude-code-ide-extras-common--prepare-buffer-for-file file-path)))
           (with-current-buffer target-buffer

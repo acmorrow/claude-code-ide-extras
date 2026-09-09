@@ -38,7 +38,7 @@
 ;; This will register all available MCP tools with claude-code-ide.
 ;;
 ;; You can also install and set up individual packages if you only need
-;; specific functionality. See each package's commentary for details.
+;; specific functionality.  See each package's commentary for details.
 
 ;;; Code:
 
@@ -58,7 +58,9 @@
 ;;;###autoload
 (defun claude-code-ide-extras-setup ()
   "Set up all claude-code-ide-extras packages.
-This registers all MCP tools from projectile, emacs, lsp, and meta packages."
+This registers the MCP tools provided by claude-code-ide-extras-projectile,
+claude-code-ide-extras-emacs, claude-code-ide-extras-lsp and
+claude-code-ide-extras-meta."
   (interactive)
   (claude-code-ide-extras-emacs-setup)
   (claude-code-ide-extras-lsp-setup)
