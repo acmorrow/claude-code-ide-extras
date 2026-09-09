@@ -47,7 +47,7 @@
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-lsp-")
 
-(defconst claude-code-ide-extras-lsp-version "0.0.3"
+(defconst claude-code-ide-extras-lsp-version "0.0.6"
   "Version of claude-code-ide-extras-lsp.")
 
 ;;; MCP Tool Names
