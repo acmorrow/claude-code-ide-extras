@@ -217,7 +217,7 @@ Optional FILTER-REGEX (Emacs regex) filters the returned names."
       (condition-case err
           (let* ((default-directory (file-name-directory file-path))
                  (project-root (or (projectile-project-root)
-                                   (when-let ((proj (project-current)))
+                                   (when-let* ((proj (project-current)))
                                      (project-root proj)))))
             ;; Validate project root exists
             (unless project-root
@@ -234,12 +234,13 @@ Optional FILTER-REGEX (Emacs regex) filters the returned names."
   (defun claude-code-ide-extras-projectile--get-project-buffer-local-variables (file-path &optional filter-regex)
     "Get buffer-local variables with values for the project containing FILE-PATH.
 Finds the project root and returns buffer-local-variables as a Lisp form.
-Optional FILTER-REGEX (Emacs regex) filters variables by name before retrieving values."
+Optional FILTER-REGEX (Emacs regex) filters variables by name before
+retrieving values."
     (claude-code-ide-mcp-server-with-session-context nil
       (condition-case err
           (let* ((default-directory (file-name-directory file-path))
                  (project-root (or (projectile-project-root)
-                                   (when-let ((proj (project-current)))
+                                   (when-let* ((proj (project-current)))
                                      (project-root proj)))))
             ;; Validate project root exists
             (unless project-root
@@ -270,9 +271,14 @@ TASK-TYPE is one of: compile, test, configure, install, package, run.
 COMMAND is the shell command to execute (required).
 FILE-PATH is used to determine which project to operate on."
     (claude-code-ide-mcp-server-with-session-context nil
-      ;; Validate projectile-per-project-compilation-buffer is set
-      (if (not projectile-per-project-compilation-buffer)
-          "Error: projectile-per-project-compilation-buffer must be t for safe parallel compilation. Add (setq projectile-per-project-compilation-buffer t) to your Emacs config."
+      ;; Compilation buffers must be qualified by project, or two Claude sessions working in
+      ;; different projects end up sharing one buffer and destroying each other's output.
+      ;; Ask `projectile-compilation-buffer-scope' the function rather than reading the
+      ;; variable of the same name: the function normalizes the t shorthand and folds in the
+      ;; two obsolete booleans it replaced, so every spelling a user might have configured is
+      ;; accepted here and no deprecated variable is named.
+      (if (not (memq 'project (projectile-compilation-buffer-scope)))
+          "Error: compilation buffers must be qualified by project for safe concurrent compilation. Add 'project to projectile-compilation-buffer-scope, e.g. (setq projectile-compilation-buffer-scope '(project)) or '(project command)."
         ;; Determine project from file-path
         (let* ((default-directory (file-name-directory file-path))
                (project-root (projectile-project-root)))
@@ -296,12 +302,22 @@ FILE-PATH is used to determine which project to operate on."
                 ;; Cache the command in projectile's map
                 (when command
                   (puthash compilation-dir command command-map))
-                ;; Compute the buffer name deterministically (respects per-project setting)
-                (let ((buffer-name (projectile-compilation-buffer-name "compilation")))
-                  ;; Call the projectile task function (non-blocking)
+                ;; Observe the buffer projectile creates rather than predicting its name.
+                ;; When the scope includes `command' the name also depends on
+                ;; `projectile--compilation-command-type', which projectile binds during the
+                ;; call and which is nil before it, so a prediction made here would name a
+                ;; buffer that never comes into existence. Capturing the process buffer is
+                ;; correct under every scope and leaves the naming scheme entirely
+                ;; projectile's business. The hook runs synchronously inside `compile', so
+                ;; the capture is complete by the time the task function returns.
+                (let* ((started nil)
+                       (compilation-start-hook
+                        (cons (lambda (proc) (setq started (process-buffer proc)))
+                              compilation-start-hook)))
                   (funcall task-function nil)
-                  ;; Return the buffer name for later querying
-                  (format "Started %s in buffer: %s" task-type buffer-name)))))))))
+                  (if (not (buffer-live-p started))
+                      (format "Error: %s started no compilation process, so there is nothing to query" task-type)
+                    (format "Started %s in buffer: %s" task-type (buffer-name started)))))))))))
 
   ;; Tool 2: Wait for projectile task completion and get size info
   (defun claude-code-ide-extras-projectile--task-wait (buffer-name)
@@ -438,6 +454,13 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
   "Register all Projectile MCP tools with claude-code-ide."
   (interactive)
 
+  ;; `projectile-compilation-buffer-scope' arrived in projectile 3.4.0, and task_start
+  ;; depends on it to decide whether compilation buffers are safely qualified. Probe for the
+  ;; function rather than comparing `projectile-version': it states the requirement itself
+  ;; instead of a proxy for it, and cannot be misled by a fork or a snapshot build.
+  (unless (fboundp 'projectile-compilation-buffer-scope)
+    (error "Projectile 3.4.0 or later is required; projectile-compilation-buffer-scope is missing"))
+
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--get-project-buffer-local-keys
    :name claude-code-ide-extras-projectile-get-project-buffer-local-keys-tool-name
@@ -474,7 +497,7 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--task-start
    :name claude-code-ide-extras-projectile-task-start-tool-name
-   :description "Start a projectile task (compile, test, configure, install, package, run) for a project. Non-blocking - returns immediately with the compilation buffer name. Use projectile_task_wait to poll for completion, then projectile_task_query to retrieve output. Requires projectile-per-project-compilation-buffer to be enabled."
+   :description "Start a projectile task (compile, test, configure, install, package, run) for a project. Non-blocking - returns immediately with the name of the compilation buffer that was actually created. Use projectile_task_wait to poll for completion, then projectile_task_query to retrieve output. Requires projectile-compilation-buffer-scope to include 'project, so that concurrent sessions in different projects cannot share a buffer. The buffer name is qualified by project, and additionally by command type when the scope includes 'command, so it varies with the user's configuration - always use the name this tool returns rather than assuming one."
    :args '((:name "task_type"
             :type string
             :description "The type of projectile task to run: compile, test, configure, install, package, or run")
