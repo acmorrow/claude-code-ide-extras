@@ -42,7 +42,7 @@
 (require 'claude-code-ide-extras-common)
 
 (defgroup claude-code-ide-extras-lsp nil
-  "LSP MCP tools for claude-code-ide."
+  "LSP MCP tools for `claude-code-ide'."
   :group 'lsp-mode
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-lsp-")
@@ -173,7 +173,7 @@ LINE is 1-based, COLUMN is 0-based (Emacs conventions)."
 
 ;;;###autoload
 (defun claude-code-ide-extras-lsp-setup ()
-  "Register all LSP MCP tools with claude-code-ide."
+  "Register all LSP MCP tools with `claude-code-ide'."
   (interactive)
 
   (claude-code-ide-make-tool

@@ -57,7 +57,7 @@
 (require 'claude-code-ide-extras-common)
 
 (defgroup claude-code-ide-extras-emacs nil
-  "Emacs introspection MCP tools for claude-code-ide."
+  "Emacs introspection MCP tools for `claude-code-ide'."
   :group 'help
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-emacs-")
@@ -457,7 +457,7 @@ keyed by variable name with a leading colon."
   "Execute arbitrary elisp CODE with FULL Emacs privileges.
 
 Evaluates CODE with complete access to the filesystem, network, processes,
-and all Emacs state. Operates under the assumption that Claude has been
+and all Emacs state.  Operates under the assumption that Claude has been
 explicitly granted access to the Emacs session for trusted projects.
 
 CODE is a string containing elisp to evaluate (e.g., \"(+ 1 2)\").
@@ -480,15 +480,15 @@ Errors are caught and returned as formatted error strings."
 Region spans from START-LINE:START-COLUMN to END-LINE:END-COLUMN.
 Lines are 1-based, columns are 0-based (consistent with Emacs conventions).
 
-Uses the built-in `eval-region` function, which evaluates all forms in the
+Uses the built-in `eval-region' function, which evaluates all forms in the
 region for their side effects (like defining functions) but doesn't return
-the value of the last form. Use this when reloading multiple function
-definitions from a code file. Each defun is evaluated and the function is
+the value of the last form.  Use this when reloading multiple function
+definitions from a code file.  Each defun is evaluated and the function is
 redefined in Emacs, but the return values (which would just be the function
 symbols) are discarded.
 
-For computing something and getting the result back, use `eval-elisp` instead
-with a progn form that returns the last expression's value. Both tools together
+For computing something and getting the result back, use eval_elisp instead
+with a progn form that returns the last expression's value.  Both tools together
 provide the right primitive for each use case."
   (claude-code-ide-mcp-server-with-session-context nil
     (condition-case err
@@ -528,12 +528,12 @@ This executes arbitrary elisp with full Emacs privileges.
 LINE is 1-based, COLUMN is 0-based (consistent with Emacs conventions).
 
 Finds the top-level s-expression at the given position and evaluates it,
-reloading the function definition. Essential for iterative development,
+reloading the function definition.  Essential for iterative development,
 allowing Claude to modify a function definition and immediately reload it
 without restarting Emacs or evaluating the entire file.
 
-The point position doesn't need to be exact. As long as it's anywhere within
-the function definition, eval-defun will find the enclosing top-level form
+The point position doesn't need to be exact.  As long as it's anywhere within
+the function definition, `eval-defun' will find the enclosing top-level form
 and evaluate it."
   (claude-code-ide-mcp-server-with-session-context nil
     (condition-case err
@@ -558,14 +558,14 @@ and evaluate it."
 (defun claude-code-ide-extras-emacs--find-file (file-path)
   "Open FILE-PATH into a buffer without displaying it to the user.
 
-Uses find-file-noselect, which loads the file into a buffer but doesn't
-change the user's window configuration. If the file is already open in a
+Uses `find-file-noselect', which loads the file into a buffer but doesn't
+change the user's window configuration.  If the file is already open in a
 buffer, reuses that existing buffer rather than creating a new one.
 
 Primary use case is opening files before calling LSP operations like
-lsp_format_buffer. When Claude edits a file using the Write tool, the file
-exists on disk but may not be loaded in Emacs. LSP formatting requires an
-active buffer with lsp-mode enabled. This tool ensures the file is loaded
+lsp_format_buffer.  When Claude edits a file using the Write tool, the file
+exists on disk but may not be loaded in Emacs.  LSP formatting requires an
+active buffer with lsp-mode enabled.  This tool ensures the file is loaded
 so subsequent LSP operations work correctly.
 
 The buffer will have all normal file-visiting behavior: major mode activation,
@@ -586,13 +586,13 @@ Returns a formatted string: \"Buffer: <buffer-name>\""
   "Hash table storing saved point positions as markers.
 
 Markers are used (not integer positions) because markers automatically track
-buffer changes. When text is inserted or deleted before a saved position, the
-marker adjusts to maintain its logical location. Without this, restore would
+buffer changes.  When text is inserted or deleted before a saved position, the
+marker adjusts to maintain its logical location.  Without this, restore would
 jump to the wrong place after edits.
 
 Keys are token strings (format: \"buffer-name-timestamp\"), values are marker
-objects pointing into buffers. Markers are created on \"set\" action via
-point-marker, stored in the hash with a unique token, and cleaned up on
+objects pointing into buffers.  Markers are created on \"set\" action via
+`point-marker', stored in the hash with a unique token, and cleaned up on
 \"restore\" action via remhash.
 
 Potential memory leak exists if Claude calls \"set\" but never \"restore\" (due
@@ -855,7 +855,7 @@ If no references found, returns a message indicating that."
 
 ;;;###autoload
 (defun claude-code-ide-extras-emacs-setup ()
-  "Register all Emacs introspection MCP tools with claude-code-ide."
+  "Register all Emacs introspection MCP tools with `claude-code-ide'."
   (interactive)
 
   (claude-code-ide-make-tool

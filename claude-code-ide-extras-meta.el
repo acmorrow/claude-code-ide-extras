@@ -37,7 +37,7 @@
 (require 'claude-code-ide)
 
 (defgroup claude-code-ide-extras-meta nil
-  "Meta MCP tools for claude-code-ide."
+  "Meta MCP tools for `claude-code-ide'."
   :group 'tools
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-meta-")
@@ -116,7 +116,7 @@ matches the loaded tool set."
 ;;; Setup function
 
 (defun claude-code-ide-extras-meta-setup ()
-  "Register meta MCP tools with claude-code-ide."
+  "Register meta MCP tools with `claude-code-ide'."
   (interactive)
 
   (claude-code-ide-make-tool

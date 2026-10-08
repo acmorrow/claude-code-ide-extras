@@ -48,7 +48,7 @@
 (require 'claude-code-ide-extras-projectile)
 
 (defgroup claude-code-ide-extras nil
-  "MCP tools suite for claude-code-ide."
+  "MCP tools suite for `claude-code-ide'."
   :group 'tools
   :prefix "claude-code-ide-extras-")
 

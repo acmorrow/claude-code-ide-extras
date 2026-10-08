@@ -44,7 +44,7 @@
 (require 'seq)
 
 (defgroup claude-code-ide-extras-projectile nil
-  "Projectile MCP tools for claude-code-ide."
+  "Projectile MCP tools for `claude-code-ide'."
   :group 'projectile
   :group 'claude-code-ide
   :prefix "claude-code-ide-extras-projectile-")
@@ -327,7 +327,7 @@ FILE-PATH is used to determine which project to operate on."
 BUFFER-NAME is the name of the compilation buffer to check.
 
 Returns \\='running if still executing, or \\='finished with output size
-\(lines and chars) when complete. Use this to poll for completion and
+\(lines and chars) when complete.  Use this to poll for completion and
 decide whether to use head/tail limiting when calling
 projectile_task_query."
   (claude-code-ide-mcp-server-with-session-context nil
@@ -393,8 +393,8 @@ CONTEXT-LINES specifies number of lines before/after each match (default 0)."
 (defun claude-code-ide-extras-projectile--get-project-files (&optional filter-regex)
   "Enumerate all files in the current project.
 
-Uses projectile's cached file list for speed. Returns files as a list of
-paths relative to the project root. This is much faster than using find
+Uses projectile's cached file list for speed.  Returns files as a list of
+paths relative to the project root.  This is much faster than using find
 because projectile maintains an up-to-date cache of project files.
 
 The file list respects projectile's ignore rules (from .projectile,
@@ -417,7 +417,7 @@ Optional FILTER-REGEX (Emacs regex) filters the returned paths."
 Each entry is a plist with :name, :mode, :file, and :modified keys,
 for the same reason as `claude-code-ide-extras-emacs--get-buffers'.
 
-Uses projectile-project-buffers, which includes buffers visiting project
+Uses `projectile-project-buffers', which includes buffers visiting project
 files and project-associated buffers such as compilation buffers.
 
 Optional FILTER-REGEX (Emacs regex) filters by buffer name.
@@ -453,7 +453,7 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
 
 ;;;###autoload
 (defun claude-code-ide-extras-projectile-setup ()
-  "Register all Projectile MCP tools with claude-code-ide."
+  "Register all Projectile MCP tools with `claude-code-ide'."
   (interactive)
 
   ;; `projectile-compilation-buffer-scope' arrived in projectile 3.4.0, and task_start
