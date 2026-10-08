@@ -460,8 +460,8 @@ Evaluates CODE with complete access to the filesystem, network, processes,
 and all Emacs state.  Operates under the assumption that Claude has been
 explicitly granted access to the Emacs session for trusted projects.
 
-CODE is a string containing elisp to evaluate (e.g., \"(+ 1 2)\").
-Returns the result formatted as a string via %S.
+CODE is a string containing elisp to evaluate (e.g., \"(+ 1 2)\") with
+lexical binding.  Returns the result formatted as a string via %S.
 
 Example:
   (claude-code-ide-extras-emacs--eval-elisp \"(buffer-list)\")
@@ -470,7 +470,7 @@ Example:
 Errors are caught and returned as formatted error strings."
   (claude-code-ide-mcp-server-with-session-context nil
     (condition-case err
-        (let ((result (eval (read code))))
+        (let ((result (eval (read code) t)))
           (format "%S" result))
       (error (format "Error evaluating elisp: %s" (error-message-string err))))))
 
