@@ -233,7 +233,8 @@ Optional FILTER-REGEX (Emacs regex) filters the returned names."
 
   (defun claude-code-ide-extras-projectile--get-project-buffer-local-variables (file-path &optional filter-regex)
     "Get buffer-local variables with values for the project containing FILE-PATH.
-Finds the project root and returns buffer-local-variables as a Lisp form.
+Finds the project root and returns its buffer-local variables as a plist
+keyed by variable name with a leading colon.
 Optional FILTER-REGEX (Emacs regex) filters variables by name before
 retrieving values."
     (claude-code-ide-mcp-server-with-session-context nil
@@ -413,7 +414,8 @@ Optional FILTER-REGEX (Emacs regex) filters the returned paths."
 
   (defun claude-code-ide-extras-projectile--get-project-buffers (&optional filter-regex mode-filter files-only)
     "Return open buffers belonging to the current project as a Lisp form.
-Each entry is an alist with name, mode, file, and modified fields.
+Each entry is a plist with :name, :mode, :file, and :modified keys,
+for the same reason as `claude-code-ide-extras-emacs--get-buffers'.
 
 Uses projectile-project-buffers, which includes buffers visiting project
 files and project-associated buffers such as compilation buffers.
@@ -440,10 +442,10 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
                                                 (string-match-p mode-filter (symbol-name mode)))
                                             (or (not files-only)
                                                 file))
-                                   `((name . ,name)
-                                     (mode . ,mode)
-                                     (file . ,file)
-                                     (modified . ,modified)))))
+                                   (list :name name
+                                         :mode mode
+                                         :file file
+                                         :modified modified))))
                              (projectile-project-buffers))))))
         (error (format "Error listing project buffers: %s" (error-message-string err))))))
 
@@ -476,7 +478,7 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--get-project-buffer-local-variables
    :name claude-code-ide-extras-projectile-get-project-buffer-local-variables-tool-name
-   :description "Get buffer-local variables with values for the project root containing a file. Returns buffer-local-variables as a Lisp form. Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables."
+   :description "Get buffer-local variables with values for the project root containing a file. Returns a plist keyed by variable name with a leading colon, e.g. (:major-mode c++-ts-mode :buffer-read-only nil). Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to any file in the project. Project root will be determined automatically.")
@@ -488,7 +490,7 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--read-project-dir-locals
    :name claude-code-ide-extras-projectile-read-project-dir-locals-tool-name
-   :description "DEPRECATED: Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Read buffer-local variables for the project root containing a file. Finds the project root via projectile/project.el, then returns ALL buffer-local-variables as a Lisp form. WARNING: Very context-expensive (10k+ tokens). The new tools support filtering and discovery patterns."
+   :description "DEPRECATED: Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Read buffer-local variables for the project root containing a file. Finds the project root via projectile/project.el, then returns ALL buffer-local variables as a plist keyed by variable name with a leading colon. WARNING: Very context-expensive (10k+ tokens). The new tools support filtering and discovery patterns."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to any file in the project. Project root will be determined automatically.")))
@@ -567,7 +569,7 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-projectile--get-project-buffers
    :name claude-code-ide-extras-projectile-get-project-buffers-tool-name
-   :description "List open buffers belonging to the current project. Returns a Lisp list of alists, each with name, mode, file (nil if not visiting a file), and modified fields. Includes source buffers and project-associated buffers such as compilation buffers. Use filter_regex to match buffer names, mode_filter to match major mode, or files_only to restrict to file-visiting buffers."
+   :description "List open buffers belonging to the current project. Returns a Lisp list of plists, each with :name, :mode, :file (nil if not visiting a file), and :modified keys. Includes source buffers and project-associated buffers such as compilation buffers. Use filter_regex to match buffer names, mode_filter to match major mode, or files_only to restrict to file-visiting buffers."
    :args '((:name "filter_regex"
             :type string
             :description "Optional Emacs regex to filter by buffer name (e.g., \"\\*compilation\" or \"\\.cpp$\")."

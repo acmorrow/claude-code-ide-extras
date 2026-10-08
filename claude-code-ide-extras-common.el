@@ -222,7 +222,10 @@ Only kills the buffer if it was opened by this function (not already open)."
 
 (defun claude-code-ide-extras-common--get-buffer-local-variables (file-path &optional filter-regex)
   "Get buffer-local variables with values for FILE-PATH.
-Opens FILE-PATH and returns `buffer-local-variables' as a Lisp form.
+Opens FILE-PATH and returns its buffer-local variables as a printed
+plist, keyed by each variable name with a leading colon, e.g.
+\(:major-mode c++-ts-mode :buffer-read-only nil).  Locally void
+variables are omitted.
 Optional FILTER-REGEX (Emacs regex) filters variables by name before
 retrieving values.
 
@@ -237,20 +240,29 @@ Only kills the buffer if it was opened by this function (not already open)."
          (buffer (find-file-noselect file-path)))
     (unwind-protect
         (with-current-buffer buffer
-          (let* ((vars (buffer-local-variables))
+          ;; Locally void variables appear as bare symbols rather than
+          ;; conses; drop them, as get-buffer-local-keys does.
+          (let* ((vars (seq-filter #'consp (buffer-local-variables)))
                  ;; Apply filter if provided
                  (filtered (if filter-regex
                                (condition-case err
                                    (seq-filter (lambda (entry)
-                                                 (and (consp entry)
-                                                      (string-match-p filter-regex
-                                                                      (symbol-name (car entry)))))
+                                                 (string-match-p filter-regex
+                                                                 (symbol-name (car entry))))
                                                vars)
                                  (invalid-regexp
                                   (error "Invalid regular expression '%s': %s"
                                          filter-regex (error-message-string err))))
                              vars)))
-            (format "%S" filtered)))
+            ;; Print a plist rather than the native alist, because `prin1'
+            ;; prints (var . nil) as (var) and (var . (a b)) as (var a b),
+            ;; which a reader of the text easily mistakes for a set flag or
+            ;; a multi-valued entry.  No variable can be named by a
+            ;; keyword, so the keyword keys are unambiguous.
+            (format "%S" (mapcan (lambda (entry)
+                                   (list (intern (concat ":" (symbol-name (car entry))))
+                                         (cdr entry)))
+                                 filtered))))
       ;; Only kill buffer if we opened it (not already open)
       (unless existing-buffer
         (kill-buffer buffer)))))

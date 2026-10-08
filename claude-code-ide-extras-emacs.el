@@ -316,7 +316,7 @@
      claude-code-ide-extras-emacs-xref-find-references-at-point-tool-name)
 
 (defcustom claude-code-ide-extras-emacs-get-point-position-usage-prompt
-  "Get current point position in a buffer. Returns line (1-based) and column (0-based) as a Lisp alist."
+  "Get current point position in a buffer. Returns a plist (:line N :column N), line 1-based and column 0-based."
   "Usage guidance for the get_point_position MCP tool."
   :type 'string
   :group 'claude-code-ide-extras-emacs)
@@ -433,7 +433,8 @@ Optional FILTER-REGEX (Emacs regex) filters the returned names."
 
   (defun claude-code-ide-extras-emacs--get-buffer-local-variables (file-path &optional filter-regex)
     "Get buffer-local variables with values for FILE-PATH.
-Opens FILE-PATH and returns buffer-local-variables as a Lisp form.
+Opens FILE-PATH and returns its buffer-local variables as a plist
+keyed by variable name with a leading colon.
 Optional FILTER-REGEX (Emacs regex) filters variables by name before
 retrieving values."
     (claude-code-ide-mcp-server-with-session-context nil
@@ -446,7 +447,8 @@ retrieving values."
   (defun claude-code-ide-extras-emacs--read-dir-locals (file-path)
     "Read effective dir-local variables for FILE-PATH.
 DEPRECATED: Delegates to get-buffer-local-variables for compatibility.
-Opens FILE-PATH and returns buffer-local-variables as a Lisp form."
+Opens FILE-PATH and returns its buffer-local variables as a plist
+keyed by variable name with a leading colon."
     ;; Simply delegate to the new function without filtering
     (claude-code-ide-extras-emacs--get-buffer-local-variables file-path nil))
 
@@ -665,8 +667,8 @@ For \"restore\": Restore point to position saved with TOKEN.
         (error (format "Error positioning point: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--get-point-position (buffer-name)
-    "Return the current point position in BUFFER-NAME as a Lisp alist.
-Returns ((line . N) (column . N)) where line is 1-based and column is
+    "Return the current point position in BUFFER-NAME as a Lisp plist.
+Returns (:line N :column N) where line is 1-based and column is
 0-based, matching the coordinate conventions used by position_point and
 all other tools in this package."
     (claude-code-ide-mcp-server-with-session-context nil
@@ -677,12 +679,14 @@ all other tools in this package."
               (with-current-buffer buffer
                 (let* ((line (line-number-at-pos))
                        (column (- (point) (line-beginning-position))))
-                  (format "%S" `((line . ,line) (column . ,column)))))))
+                  (format "%S" (list :line line :column column))))))
         (error (format "Error getting point position: %s" (error-message-string err))))))
 
   (defun claude-code-ide-extras-emacs--get-buffers (&optional filter-regex mode-filter files-only)
     "Return all open Emacs buffers as a Lisp form.
-Each entry is an alist with name, mode, file, and modified fields.
+Each entry is a plist with :name, :mode, :file, and :modified keys.
+A plist rather than a dotted-pair alist, because `prin1' prints
+\(file . nil) as (file), which reads like a set flag.
 
 Optional FILTER-REGEX (Emacs regex) filters by buffer name.
 Optional MODE-FILTER (Emacs regex) filters by major mode name.
@@ -703,10 +707,10 @@ When FILES-ONLY is non-nil, only file-visiting buffers are included."
                                             (string-match-p mode-filter (symbol-name mode)))
                                         (or (not files-only)
                                             file))
-                               `((name . ,name)
-                                 (mode . ,mode)
-                                 (file . ,file)
-                                 (modified . ,modified)))))
+                               (list :name name
+                                     :mode mode
+                                     :file file
+                                     :modified modified))))
                          (buffer-list))))
         (error (format "Error listing buffers: %s" (error-message-string err))))))
 
@@ -935,7 +939,7 @@ If no references found, returns a message indicating that."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-emacs--get-buffer-local-variables
    :name claude-code-ide-extras-emacs-get-buffer-local-variables-tool-name
-   :description "Get buffer-local variables with values for a file. Returns buffer-local-variables as a Lisp form. Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables."
+   :description "Get buffer-local variables with values for a file. Returns a plist keyed by variable name with a leading colon, e.g. (:major-mode c++-ts-mode :buffer-read-only nil). Optional filter_regex (Emacs regex) to limit results. WARNING: Without filtering, this can be very context-expensive (10k+ tokens). STRONGLY RECOMMENDED: Use filter_regex to get only relevant variables."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to a file to read buffer-local variables for.")
@@ -947,7 +951,7 @@ If no references found, returns a message indicating that."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-emacs--read-dir-locals
    :name claude-code-ide-extras-emacs-read-dir-locals-tool-name
-   :description "DEPRECATED: Use get_buffer_local_keys/get_buffer_local_variables instead. Read buffer-local variables for a specific file path. Opens the file and returns ALL buffer-local-variables as a Lisp form. WARNING: Very context-expensive (10k+ tokens). The new tools support filtering and discovery patterns."
+   :description "DEPRECATED: Use get_buffer_local_keys/get_buffer_local_variables instead. Read buffer-local variables for a specific file path. Opens the file and returns ALL buffer-local variables as a plist keyed by variable name with a leading colon. WARNING: Very context-expensive (10k+ tokens). The new tools support filtering and discovery patterns."
    :args '((:name "file_path"
             :type string
             :description "Absolute path to a file or directory to read buffer-local variables for.")))
@@ -1074,7 +1078,7 @@ If no references found, returns a message indicating that."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-emacs--get-point-position
    :name claude-code-ide-extras-emacs-get-point-position-tool-name
-   :description "Get the current point position in a buffer. Returns a Lisp alist ((line . N) (column . N)) where line is 1-based and column is 0-based, matching the conventions used by position_point and all other tools."
+   :description "Get the current point position in a buffer. Returns a Lisp plist (:line N :column N) where line is 1-based and column is 0-based, matching the conventions used by position_point and all other tools."
    :args '((:name "buffer_name"
             :type string
             :description "Name of the buffer to query.")))
@@ -1082,7 +1086,7 @@ If no references found, returns a message indicating that."
   (claude-code-ide-make-tool
    :function #'claude-code-ide-extras-emacs--get-buffers
    :name claude-code-ide-extras-emacs-get-buffers-tool-name
-   :description "List all open Emacs buffers. Returns a Lisp list of alists, each with name, mode, file (nil if not visiting a file), and modified fields. Use filter_regex to match buffer names, mode_filter to match major mode, or files_only to restrict to file-visiting buffers."
+   :description "List all open Emacs buffers. Returns a Lisp list of plists, each with :name, :mode, :file (nil if not visiting a file), and :modified keys. Use filter_regex to match buffer names, mode_filter to match major mode, or files_only to restrict to file-visiting buffers."
    :args '((:name "filter_regex"
             :type string
             :description "Optional Emacs regex to filter by buffer name (e.g., \"\\*compilation\" or \"\\.cpp$\")."

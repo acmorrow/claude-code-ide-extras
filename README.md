@@ -187,7 +187,7 @@ Returns matching lines with optional context.
 Lightweight discovery returning only variable names. Optional Emacs regex filtering. Much cheaper than getting full variables.
 
 **get_project_buffer_local_variables** - Get buffer-local variables with values for project root
-Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
+Returns a plist keyed by variable name with a leading colon, e.g. `(:major-mode c++-ts-mode :buffer-read-only nil)`. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
 
 **read_project_dir_locals** - DEPRECATED: Query project-level directory-local variables
 Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Returns ALL variables (very expensive).
@@ -196,7 +196,7 @@ Use get_project_buffer_local_keys/get_project_buffer_local_variables instead. Re
 Returns list of relative paths. Uses projectile cache for speed, respects ignore rules from .projectile and .gitignore. Optional Emacs regex filter on file paths.
 
 **get_project_buffers** - List open buffers belonging to the current project
-Returns Lisp list of alists with name, mode, file, and modified fields. Includes source buffers and project-associated buffers such as compilation buffers. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only).
+Returns Lisp list of plists with :name, :mode, :file, and :modified keys. Includes source buffers and project-associated buffers such as compilation buffers. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only).
 
 ### LSP
 
@@ -226,7 +226,7 @@ Search compilation, scratch, messages, or any other buffer with optional context
 Lightweight discovery returning only variable names. Optional Emacs regex filtering. Much cheaper than getting full variables.
 
 **get_buffer_local_variables** - Get buffer-local variables with values for a file
-Returns variables as Lisp form. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
+Returns a plist keyed by variable name with a leading colon, e.g. `(:major-mode c++-ts-mode :buffer-read-only nil)`. Optional Emacs regex filtering. WARNING: Without filtering, can be very context-expensive (10k+ tokens).
 
 **read_dir_locals** - DEPRECATED: Read buffer-local variables for a file
 Use get_buffer_local_keys/get_buffer_local_variables instead. Returns ALL variables (very expensive).
@@ -256,10 +256,10 @@ Uses point position for full semantic context, enabling accurate resolution of o
 Point-based for semantic disambiguation. Essential for finding all usages of a symbol.
 
 **get_point_position** - Get current point position in a buffer
-Returns `((line . N) (column . N))` with 1-based line and 0-based column. Counterpart to position_point.
+Returns `(:line N :column N)` with 1-based line and 0-based column. Counterpart to position_point.
 
 **get_buffers** - List all open Emacs buffers
-Returns Lisp list of alists with name, mode, file, and modified fields. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only). Use when you need to find a buffer by name or mode across the entire Emacs session.
+Returns Lisp list of plists with :name, :mode, :file, and :modified keys. Optional filter_regex (name), mode_filter (major mode), and files_only (file-visiting buffers only). Use when you need to find a buffer by name or mode across the entire Emacs session.
 
 ### Meta
 

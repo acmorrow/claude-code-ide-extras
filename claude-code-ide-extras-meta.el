@@ -97,8 +97,14 @@ matches the loaded tool set."
       ;; Format the output
       (if (null prompts)
           "No custom MCP tool usage guidance has been configured.\n\nYou can set guidance globally via :custom in use-package, or per-project via .dir-locals.el."
+        ;; Supply the header's separator ourselves rather than trusting the
+        ;; user's string to end in exactly the right whitespace; a header
+        ;; loaded from a file via `string-trim' has none at all.
         (concat
-         claude-code-ide-extras-meta-get-mcp-custom-advice-header
+         (let ((header (string-trim-right
+                        claude-code-ide-extras-meta-get-mcp-custom-advice-header)))
+           (unless (string-empty-p header)
+             (concat header "\n\n")))
          (mapconcat
           (lambda (pair)
             (let ((mcp-name (car pair))
