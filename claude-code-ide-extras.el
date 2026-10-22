@@ -52,7 +52,7 @@
   :group 'tools
   :prefix "claude-code-ide-extras-")
 
-(defconst claude-code-ide-extras-version "0.0.6"
+(defconst claude-code-ide-extras-version "0.0.7"
   "Version of claude-code-ide-extras.")
 
 ;;;###autoload
